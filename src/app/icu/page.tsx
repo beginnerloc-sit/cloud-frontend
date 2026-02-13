@@ -1,24 +1,19 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Heart, RefreshCw } from 'lucide-react';
+import { useEffect, useState, useMemo } from 'react';
+import { Heart, RefreshCw, Bed, Activity } from 'lucide-react';
 import { StatCard, LineChartCard, DataTable, PieChartCard } from '@/components';
-import { apiService, ICUUtilization, ICUStatusDistribution } from '@/lib/api';
+import { apiService, ICUUtilization, ICUUtilizationResponse } from '@/lib/api';
 
 export default function ICUPage() {
-  const [data, setData] = useState<ICUUtilization[]>([]);
-  const [statusDist, setStatusDist] = useState<ICUStatusDistribution[]>([]);
+  const [response, setResponse] = useState<ICUUtilizationResponse | null>(null);
   const [loading, setLoading] = useState(true);
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const [utilData, statusData] = await Promise.all([
-        apiService.getICUUtilization(),
-        apiService.getICUStatusDistribution(),
-      ]);
-      setData(utilData);
-      setStatusDist(statusData);
+      const result = await apiService.getICUUtilization();
+      setResponse(result);
     } catch (error) {
       console.error('Error loading ICU data:', error);
     } finally {
@@ -30,29 +25,72 @@ export default function ICUPage() {
     loadData();
   }, []);
 
-  const avgUtilization = data.length > 0 
-    ? data.reduce((sum, r) => sum + (r.utilization_rate || 0), 0) / data.length 
-    : 0;
-  const totalBedsOccupied = data.reduce((sum, r) => sum + (r.beds_occupied || 0), 0);
-  const totalBedsAvailable = data.reduce((sum, r) => sum + (r.beds_available || 0), 0);
+  // Extract data from response
+  const rawData: ICUUtilization[] = Array.isArray(response?.data) ? response.data : [];
+  const summary = response?.summary;
 
-  const chartData = data.map((r) => ({
-    epi_week: r.epi_week || '',
-    utilization_rate: r.utilization_rate || 0,
-    beds_occupied: r.beds_occupied || 0,
-  }));
+  // Get unique epi_weeks sorted chronologically
+  const sortedWeeks = useMemo(() => {
+    const weeks = [...new Set(rawData.map(r => r.epi_week || ''))].filter(Boolean);
+    return weeks.sort();
+  }, [rawData]);
 
-  const statusPieData = statusDist.map((r) => ({
-    name: r.status || 'Unknown',
-    value: r.count || 0,
-  }));
+  // Aggregate by status for pie chart
+  const statusTotals = useMemo(() => {
+    const totals: Record<string, number> = {};
+    rawData.forEach(r => {
+      const status = r.status || 'Unknown';
+      totals[status] = (totals[status] || 0) + (r.avg_beds || 0);
+    });
+    return Object.entries(totals)
+      .map(([name, value]) => ({ name, value: Math.round(value) }))
+      .sort((a, b) => b.value - a.value);
+  }, [rawData]);
+
+  // Line chart data: COVID beds by week
+  const chartData = useMemo(() => {
+    const byWeek: Record<string, { covid: number; non_covid: number; empty: number }> = {};
+    rawData.forEach(r => {
+      const week = r.epi_week || '';
+      if (!byWeek[week]) byWeek[week] = { covid: 0, non_covid: 0, empty: 0 };
+      const status = r.status?.toLowerCase() || '';
+      if (status === 'covid') byWeek[week].covid = r.avg_beds || 0;
+      else if (status === 'non-covid') byWeek[week].non_covid = r.avg_beds || 0;
+      else if (status === 'empty') byWeek[week].empty = r.avg_beds || 0;
+    });
+    return sortedWeeks.map(week => ({
+      epi_week: week,
+      covid: byWeek[week]?.covid || 0,
+      non_covid: byWeek[week]?.non_covid || 0,
+      empty: byWeek[week]?.empty || 0,
+    }));
+  }, [rawData, sortedWeeks]);
+
+  // Calculate stats
+  const avgCovidBeds = useMemo(() => {
+    const covidData = rawData.filter(r => r.status?.toLowerCase() === 'covid');
+    if (covidData.length === 0) return 0;
+    return covidData.reduce((sum, r) => sum + (r.avg_beds || 0), 0) / covidData.length;
+  }, [rawData]);
+
+  const avgNonCovidBeds = useMemo(() => {
+    const data = rawData.filter(r => r.status?.toLowerCase() === 'non-covid');
+    if (data.length === 0) return 0;
+    return data.reduce((sum, r) => sum + (r.avg_beds || 0), 0) / data.length;
+  }, [rawData]);
+
+  const avgEmptyBeds = useMemo(() => {
+    const data = rawData.filter(r => r.status?.toLowerCase() === 'empty');
+    if (data.length === 0) return 0;
+    return data.reduce((sum, r) => sum + (r.avg_beds || 0), 0) / data.length;
+  }, [rawData]);
 
   return (
     <div>
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">ICU Data</h1>
-          <p className="text-slate-500">Monitor ICU bed utilization and status</p>
+          <h1 className="text-2xl font-bold text-slate-900">ICU Utilization</h1>
+          <p className="text-slate-500">ICU bed status by epidemiological week</p>
         </div>
         <button
           onClick={loadData}
@@ -64,37 +102,60 @@ export default function ICUPage() {
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-        <StatCard title="Avg Utilization" value={`${avgUtilization.toFixed(1)}%`} icon={Heart} color="yellow" />
-        <StatCard title="Beds Occupied" value={totalBedsOccupied} icon={Heart} color="red" />
-        <StatCard title="Beds Available" value={totalBedsAvailable} icon={Heart} color="green" />
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+        <StatCard 
+          title="Weeks Tracked" 
+          value={sortedWeeks.length} 
+          icon={Activity} 
+          color="blue" 
+        />
+        <StatCard 
+          title="Avg COVID Beds" 
+          value={avgCovidBeds.toFixed(1)} 
+          icon={Heart} 
+          color="red" 
+        />
+        <StatCard 
+          title="Avg Non-COVID" 
+          value={avgNonCovidBeds.toFixed(1)} 
+          icon={Bed} 
+          color="yellow" 
+        />
+        <StatCard 
+          title="Avg Empty Beds" 
+          value={avgEmptyBeds.toFixed(1)} 
+          icon={Bed} 
+          color="green" 
+        />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
         <LineChartCard
-          title="ICU Utilization Over Time"
+          title="ICU Bed Status Over Time"
           data={chartData}
           lines={[
-            { dataKey: 'utilization_rate', color: '#f59e0b', name: 'Utilization Rate (%)' },
+            { dataKey: 'covid', color: '#ef4444', name: 'COVID' },
+            { dataKey: 'non_covid', color: '#f59e0b', name: 'Non-COVID' },
+            { dataKey: 'empty', color: '#10b981', name: 'Empty' },
           ]}
           xAxisKey="epi_week"
           loading={loading}
         />
         <PieChartCard
-          title="ICU Status Distribution"
-          data={statusPieData}
+          title="Total Beds by Status"
+          data={statusTotals}
           loading={loading}
         />
       </div>
 
       <DataTable
         title="ICU Utilization Records"
-        data={data}
+        data={rawData}
         columns={[
+          { key: 'epi_year', header: 'Year' },
           { key: 'epi_week', header: 'Epi Week' },
-          { key: 'beds_occupied', header: 'Beds Occupied' },
-          { key: 'beds_available', header: 'Beds Available' },
-          { key: 'utilization_rate', header: 'Utilization', render: (item) => `${(item.utilization_rate || 0).toFixed(1)}%` },
+          { key: 'status', header: 'Status' },
+          { key: 'avg_beds', header: 'Avg Beds', render: (item) => (item.avg_beds || 0).toFixed(1) },
         ]}
         loading={loading}
       />

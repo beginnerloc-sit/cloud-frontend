@@ -1,27 +1,28 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Syringe, RefreshCw } from 'lucide-react';
-import { StatCard, LineChartCard, DataTable, BarChartCard, PieChartCard } from '@/components';
-import { apiService, VaccinationProgress, VaccinationByAge, VaccinationUptakeTrend } from '@/lib/api';
+import { Syringe, RefreshCw, Users, Shield, CheckCircle } from 'lucide-react';
+import { StatCard, LineChartCard, DataTable, PieChartCard, BarChartCard } from '@/components';
+import { apiService, VaccinationProgress, VaccinationProgressResponse, VaccinationByAge, VaccinationByAgeResponse } from '@/lib/api';
 
 export default function VaccinationPage() {
   const [data, setData] = useState<VaccinationProgress[]>([]);
-  const [byAge, setByAge] = useState<VaccinationByAge[]>([]);
-  const [uptakeTrend, setUptakeTrend] = useState<VaccinationUptakeTrend[]>([]);
+  const [summary, setSummary] = useState<VaccinationProgressResponse['summary']>();
+  const [byAgeData, setByAgeData] = useState<VaccinationByAge[]>([]);
+  const [byAgeSummary, setByAgeSummary] = useState<VaccinationByAgeResponse['summary']>();
   const [loading, setLoading] = useState(true);
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const [progressData, ageData, trendData] = await Promise.all([
+      const [progressResponse, byAgeResponse] = await Promise.all([
         apiService.getVaccinationProgress(),
         apiService.getVaccinationByAge(),
-        apiService.getVaccinationUptakeTrend(),
       ]);
-      setData(progressData);
-      setByAge(ageData);
-      setUptakeTrend(trendData);
+      setData(progressResponse.data || []);
+      setSummary(progressResponse.summary);
+      setByAgeData(byAgeResponse.data || []);
+      setByAgeSummary(byAgeResponse.summary);
     } catch (error) {
       console.error('Error loading vaccination data:', error);
     } finally {
@@ -33,40 +34,64 @@ export default function VaccinationPage() {
     loadData();
   }, []);
 
-  const totalDoses = data.reduce((sum, r) => sum + (r.doses_administered || 0), 0);
-  const totalFirstDose = data.reduce((sum, r) => sum + (r.first_dose || 0), 0);
-  const totalSecondDose = data.reduce((sum, r) => sum + (r.second_dose || 0), 0);
-  const totalBooster = data.reduce((sum, r) => sum + (r.booster || 0), 0);
+  // Ensure data is always an array and sort by date
+  const safeData = Array.isArray(data) ? [...data].sort((a, b) => 
+    (a.vacc_date || '').localeCompare(b.vacc_date || '')
+  ) : [];
 
-  const progressChartData = data.slice(-30).map((r) => ({
-    date: r.date || '',
-    doses: r.doses_administered || 0,
-    first_dose: r.first_dose || 0,
-    second_dose: r.second_dose || 0,
+  // Get latest record for summary stats
+  const latestRecord = safeData.length > 0 ? safeData[safeData.length - 1] : null;
+
+  // Progress over time chart - show last 60 days
+  const progressChartData = safeData.slice(-60).map((r) => ({
+    date: r.vacc_date || '',
+    'At Least One Dose': r.received_at_least_one_dose || 0,
+    'Full Regimen': r.full_regimen || 0,
+    'Minimum Protection': r.minimum_protection || 0,
   }));
 
-  const uptakeChartData = uptakeTrend.map((r) => ({
-    date: r.date || '',
-    uptake: r.uptake || 0,
+  // Uptake percentage trend chart
+  const uptakeChartData = safeData.slice(-60).map((r) => ({
+    date: r.vacc_date || '',
+    'One Dose %': r.received_one_dose_pcttakeup || 0,
+    'Full Regimen %': r.full_regimen_pcttakeup || 0,
+    'Min Protection %': r.minimum_protection_pcttakeup || 0,
   }));
 
-  const ageChartData = byAge.map((r) => ({
-    age_group: r.age_group || 'Unknown',
-    vaccinated: r.vaccinated || 0,
+  // Vaccination coverage breakdown (latest data)
+  const coverageData = latestRecord ? [
+    { name: 'At Least One Dose', value: latestRecord.received_at_least_one_dose || 0 },
+    { name: 'Full Regimen', value: latestRecord.full_regimen || 0 },
+    { name: 'Minimum Protection', value: latestRecord.minimum_protection || 0 },
+  ] : [];
+
+  // Vaccination by age data - sort by age group
+  const safeByAge = Array.isArray(byAgeData) ? byAgeData : [];
+  const ageOrder = ['5-11', '12-17', '18-29', '30-39', '40-49', '50-59', '60-69', '70-79', '80+'];
+  const sortedByAge = [...safeByAge].sort((a, b) => {
+    const aIndex = ageOrder.indexOf(a.age || '');
+    const bIndex = ageOrder.indexOf(b.age || '');
+    return aIndex - bIndex;
+  });
+  
+  const byAgeChartData = sortedByAge.map((r) => ({
+    age: r.age || 'Unknown',
+    'Protected': r.minimum_protection || 0,
+    'Unprotected': r.no_minimum_protection || 0,
   }));
 
-  const doseBreakdown = [
-    { name: 'First Dose', value: totalFirstDose },
-    { name: 'Second Dose', value: totalSecondDose },
-    { name: 'Booster', value: totalBooster },
-  ].filter(d => d.value > 0);
+  // Overall protection pie chart
+  const overallProtectionData = byAgeSummary ? [
+    { name: 'Protected', value: byAgeSummary.overall_protected || 0 },
+    { name: 'Unprotected', value: byAgeSummary.overall_unprotected || 0 },
+  ] : [];
 
   return (
     <div>
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Vaccination Data</h1>
-          <p className="text-slate-500">Track vaccination progress and coverage</p>
+          <h1 className="text-2xl font-bold text-slate-900">Vaccination Progress</h1>
+          <p className="text-slate-500">Track vaccination coverage and uptake rates</p>
         </div>
         <button
           onClick={loadData}
@@ -79,28 +104,50 @@ export default function VaccinationPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-        <StatCard title="Total Doses" value={totalDoses} icon={Syringe} color="green" />
-        <StatCard title="First Dose" value={totalFirstDose} icon={Syringe} color="blue" />
-        <StatCard title="Second Dose" value={totalSecondDose} icon={Syringe} color="purple" />
-        <StatCard title="Booster" value={totalBooster} icon={Syringe} color="yellow" />
+        <StatCard 
+          title="One Dose Uptake" 
+          value={`${latestRecord?.received_one_dose_pcttakeup?.toFixed(1) || 0}%`} 
+          icon={Syringe} 
+          color="green" 
+        />
+        <StatCard 
+          title="Full Regimen" 
+          value={`${latestRecord?.full_regimen_pcttakeup?.toFixed(1) || 0}%`} 
+          icon={CheckCircle} 
+          color="blue" 
+        />
+        <StatCard 
+          title="Min Protection" 
+          value={`${latestRecord?.minimum_protection_pcttakeup?.toFixed(1) || 0}%`} 
+          icon={Shield} 
+          color="purple" 
+        />
+        <StatCard 
+          title="Days Tracked" 
+          value={summary?.total_records || safeData.length} 
+          icon={Users} 
+          color="yellow" 
+        />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
         <LineChartCard
-          title="Vaccination Progress Over Time"
+          title="Cumulative Vaccinations Over Time"
           data={progressChartData}
           lines={[
-            { dataKey: 'doses', color: '#10b981', name: 'Total Doses' },
-            { dataKey: 'first_dose', color: '#3b82f6', name: 'First Dose' },
-            { dataKey: 'second_dose', color: '#8b5cf6', name: 'Second Dose' },
+            { dataKey: 'At Least One Dose', color: '#10b981', name: 'At Least One Dose' },
+            { dataKey: 'Full Regimen', color: '#3b82f6', name: 'Full Regimen' },
+            { dataKey: 'Minimum Protection', color: '#8b5cf6', name: 'Minimum Protection' },
           ]}
           loading={loading}
         />
         <LineChartCard
-          title="Vaccination Uptake Trend"
+          title="Vaccination Uptake Rate (%)"
           data={uptakeChartData}
           lines={[
-            { dataKey: 'uptake', color: '#10b981', name: 'Uptake' },
+            { dataKey: 'One Dose %', color: '#10b981', name: 'One Dose %' },
+            { dataKey: 'Full Regimen %', color: '#3b82f6', name: 'Full Regimen %' },
+            { dataKey: 'Min Protection %', color: '#8b5cf6', name: 'Min Protection %' },
           ]}
           loading={loading}
         />
@@ -108,32 +155,90 @@ export default function VaccinationPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
         <BarChartCard
-          title="Vaccinations by Age Group"
-          data={ageChartData}
-          bars={[{ dataKey: 'vaccinated', color: '#10b981', name: 'Vaccinated' }]}
-          xAxisKey="age_group"
+          title="Vaccination Protection by Age Group (%)"
+          data={byAgeChartData}
+          bars={[
+            { dataKey: 'Protected', color: '#10b981', name: 'Protected' },
+            { dataKey: 'Unprotected', color: '#ef4444', name: 'Unprotected' },
+          ]}
+          xAxisKey="age"
           loading={loading}
         />
         <PieChartCard
-          title="Dose Distribution"
-          data={doseBreakdown}
-          colors={['#3b82f6', '#8b5cf6', '#f59e0b']}
+          title="Overall Protection Status"
+          data={overallProtectionData}
+          colors={['#10b981', '#ef4444']}
           loading={loading}
         />
       </div>
 
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <PieChartCard
+          title="Latest Coverage Distribution"
+          data={coverageData}
+          colors={['#10b981', '#3b82f6', '#8b5cf6']}
+          loading={loading}
+        />
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+          <h3 className="text-lg font-semibold text-slate-900 mb-4">Latest Statistics</h3>
+          {latestRecord ? (
+            <div className="space-y-3">
+              <div className="flex justify-between items-center p-3 bg-slate-50 rounded-lg">
+                <span className="text-slate-600">Date</span>
+                <span className="font-medium">{latestRecord.vacc_date}</span>
+              </div>
+              <div className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
+                <span className="text-slate-600">Received At Least One Dose</span>
+                <span className="font-medium text-green-600">
+                  {(latestRecord.received_at_least_one_dose || 0).toLocaleString()}
+                </span>
+              </div>
+              <div className="flex justify-between items-center p-3 bg-blue-50 rounded-lg">
+                <span className="text-slate-600">Full Regimen</span>
+                <span className="font-medium text-blue-600">
+                  {(latestRecord.full_regimen || 0).toLocaleString()}
+                </span>
+              </div>
+              <div className="flex justify-between items-center p-3 bg-purple-50 rounded-lg">
+                <span className="text-slate-600">Minimum Protection</span>
+                <span className="font-medium text-purple-600">
+                  {(latestRecord.minimum_protection || 0).toLocaleString()}
+                </span>
+              </div>
+            </div>
+          ) : (
+            <p className="text-slate-500">No data available</p>
+          )}
+        </div>
+      </div>
+
       <DataTable
-        title="Vaccination Progress Records"
-        data={data.slice(-100)}
+        title="Vaccination by Age Group"
+        data={sortedByAge}
         columns={[
-          { key: 'date', header: 'Date' },
-          { key: 'doses_administered', header: 'Doses', render: (item) => (item.doses_administered || 0).toLocaleString() },
-          { key: 'first_dose', header: 'First Dose', render: (item) => (item.first_dose || 0).toLocaleString() },
-          { key: 'second_dose', header: 'Second Dose', render: (item) => (item.second_dose || 0).toLocaleString() },
-          { key: 'booster', header: 'Booster', render: (item) => (item.booster || 0).toLocaleString() },
+          { key: 'age', header: 'Age Group' },
+          { key: 'minimum_protection', header: 'Protected (%)', render: (item) => `${item.minimum_protection || 0}%` },
+          { key: 'no_minimum_protection', header: 'Unprotected (%)', render: (item) => `${item.no_minimum_protection || 0}%` },
         ]}
         loading={loading}
       />
+
+      <div className="mt-6">
+        <DataTable
+          title="Vaccination Progress Records"
+          data={safeData.slice(-100).reverse()}
+          columns={[
+            { key: 'vacc_date', header: 'Date' },
+            { key: 'received_at_least_one_dose', header: 'One Dose+', render: (item) => (item.received_at_least_one_dose || 0).toLocaleString() },
+            { key: 'full_regimen', header: 'Full Regimen', render: (item) => (item.full_regimen || 0).toLocaleString() },
+            { key: 'minimum_protection', header: 'Min Protection', render: (item) => (item.minimum_protection || 0).toLocaleString() },
+            { key: 'received_one_dose_pcttakeup', header: 'One Dose %', render: (item) => `${item.received_one_dose_pcttakeup || 0}%` },
+            { key: 'full_regimen_pcttakeup', header: 'Full %', render: (item) => `${item.full_regimen_pcttakeup || 0}%` },
+            { key: 'minimum_protection_pcttakeup', header: 'Min %', render: (item) => `${item.minimum_protection_pcttakeup || 0}%` },
+          ]}
+          loading={loading}
+        />
+      </div>
     </div>
   );
 }

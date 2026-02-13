@@ -1,23 +1,25 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Building2, RefreshCw } from 'lucide-react';
-import { StatCard, LineChartCard, DataTable, BarChartCard } from '@/components';
-import { apiService, HospitalizationTrend, HospitalizationHeatmap } from '@/lib/api';
+import { useEffect, useState, useMemo } from 'react';
+import { Building2, RefreshCw, Activity, Users } from 'lucide-react';
+import { StatCard, LineChartCard, DataTable, BarChartCard, PieChartCard, HeatmapChart } from '@/components';
+import { apiService, HospitalizationTrend, HospitalizationTrendResponse, HospitalizationHeatmap } from '@/lib/api';
 
 export default function HospitalizationsPage() {
   const [data, setData] = useState<HospitalizationTrend[]>([]);
-  const [heatmapData, setHeatmapData] = useState<HospitalizationHeatmap[]>([]);
+  const [summary, setSummary] = useState<HospitalizationTrendResponse['summary']>();
+  const [heatmapData, setHeatmapData] = useState<HospitalizationHeatmap | null>(null);
   const [loading, setLoading] = useState(true);
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const [trendData, heatmap] = await Promise.all([
+      const [trendResponse, heatmap] = await Promise.all([
         apiService.getHospitalizationTrend(),
         apiService.getHospitalizationHeatmap(),
       ]);
-      setData(trendData);
+      setData(trendResponse.data || []);
+      setSummary(trendResponse.summary);
       setHeatmapData(heatmap);
     } catch (error) {
       console.error('Error loading hospitalizations data:', error);
@@ -30,37 +32,61 @@ export default function HospitalizationsPage() {
     loadData();
   }, []);
 
-  const totalCount = data.reduce((sum, r) => sum + (r.count || 0), 0);
+  // Ensure data is always an array
+  const safeData = Array.isArray(data) ? data : [];
+
+  // Total cases from summary or calculated
+  const totalCases = summary?.total_cases || safeData.reduce((sum, r) => sum + (r.total_count || 0), 0);
 
   // Group by clinical status
-  const statusData = data.reduce((acc: Record<string, number>, r) => {
-    const status = r.clinical_status || 'Unknown';
-    acc[status] = (acc[status] || 0) + (r.count || 0);
-    return acc;
-  }, {});
-  const statusChartData = Object.entries(statusData)
-    .map(([status, count]) => ({ status, count }))
-    .sort((a, b) => b.count - a.count);
+  const statusData = useMemo(() => {
+    const totals: Record<string, number> = {};
+    safeData.forEach(r => {
+      const status = r.clinical_status || 'Unknown';
+      totals[status] = (totals[status] || 0) + (r.total_count || 0);
+    });
+    return Object.entries(totals)
+      .map(([status, count]) => ({ status, count: Math.round(count * 10) / 10 }))
+      .sort((a, b) => b.count - a.count);
+  }, [safeData]);
 
   // Group by age group
-  const ageData = data.reduce((acc: Record<string, number>, r) => {
-    const age = r.age_group || 'Unknown';
-    acc[age] = (acc[age] || 0) + (r.count || 0);
-    return acc;
-  }, {});
-  const ageChartData = Object.entries(ageData)
-    .map(([age_group, count]) => ({ age_group, count }))
-    .sort((a, b) => b.count - a.count);
+  const ageData = useMemo(() => {
+    const totals: Record<string, number> = {};
+    safeData.forEach(r => {
+      const age = r.age_groups || 'Unknown';
+      totals[age] = (totals[age] || 0) + (r.total_count || 0);
+    });
+    return Object.entries(totals)
+      .map(([age_group, count]) => ({ age_group, count: Math.round(count * 10) / 10 }))
+      .sort((a, b) => b.count - a.count);
+  }, [safeData]);
 
-  // Timeline chart from heatmap data
-  const timelineData = heatmapData.reduce((acc: Record<string, number>, r) => {
-    const date = r.date || '';
-    acc[date] = (acc[date] || 0) + (r.value || 0);
-    return acc;
-  }, {});
-  const chartData = Object.entries(timelineData)
-    .map(([date, value]) => ({ date, hospitalizations: value }))
-    .sort((a, b) => a.date.localeCompare(b.date));
+  // Timeline by epi_week - aggregate all statuses and ages per week
+  const timelineData = useMemo(() => {
+    const weeklyTotals: Record<string, { hospitalised: number; icu: number }> = {};
+    safeData.forEach(r => {
+      const week = r.epi_week || '';
+      if (!weeklyTotals[week]) {
+        weeklyTotals[week] = { hospitalised: 0, icu: 0 };
+      }
+      if (r.clinical_status?.toLowerCase() === 'icu') {
+        weeklyTotals[week].icu += r.total_count || 0;
+      } else {
+        weeklyTotals[week].hospitalised += r.total_count || 0;
+      }
+    });
+    return Object.entries(weeklyTotals)
+      .map(([epi_week, { hospitalised, icu }]) => ({
+        epi_week,
+        Hospitalised: Math.round(hospitalised * 10) / 10,
+        ICU: Math.round(icu * 10) / 10,
+      }))
+      .sort((a, b) => a.epi_week.localeCompare(b.epi_week));
+  }, [safeData]);
+
+  // Status distribution for pie chart
+  const statusPieData = statusData.map(s => ({ name: s.status, value: s.count }));
 
   return (
     <div>
@@ -79,48 +105,89 @@ export default function HospitalizationsPage() {
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-        <StatCard title="Total Hospitalizations" value={totalCount} icon={Building2} color="blue" />
-        <StatCard title="Clinical Statuses" value={Object.keys(statusData).length} icon={Building2} color="green" />
-        <StatCard title="Age Groups" value={Object.keys(ageData).length} icon={Building2} color="purple" />
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+        <StatCard 
+          title="Total Cases" 
+          value={totalCases.toFixed(1)} 
+          icon={Building2} 
+          color="blue" 
+        />
+        <StatCard 
+          title="Weeks Tracked" 
+          value={timelineData.length} 
+          icon={Activity} 
+          color="green" 
+        />
+        <StatCard 
+          title="Clinical Statuses" 
+          value={statusData.length} 
+          icon={Building2} 
+          color="purple" 
+        />
+        <StatCard 
+          title="Age Groups" 
+          value={ageData.length} 
+          icon={Users} 
+          color="yellow" 
+        />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
         <LineChartCard
-          title="Hospitalization Trends Over Time"
-          data={chartData}
+          title="Weekly Hospitalization Trends"
+          data={timelineData}
           lines={[
-            { dataKey: 'hospitalizations', color: '#3b82f6', name: 'Hospitalizations' },
+            { dataKey: 'Hospitalised', color: '#3b82f6', name: 'Hospitalised' },
+            { dataKey: 'ICU', color: '#ef4444', name: 'ICU' },
           ]}
+          xAxisKey="epi_week"
+          loading={loading}
+        />
+        <PieChartCard
+          title="By Clinical Status"
+          data={statusPieData}
+          colors={['#3b82f6', '#ef4444']}
+          loading={loading}
+        />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <BarChartCard
+          title="By Age Group"
+          data={ageData}
+          bars={[{ dataKey: 'count', color: '#8b5cf6', name: 'Cases' }]}
+          xAxisKey="age_group"
           loading={loading}
         />
         <BarChartCard
           title="By Clinical Status"
-          data={statusChartData}
-          bars={[{ dataKey: 'count', color: '#3b82f6', name: 'Count' }]}
+          data={statusData}
+          bars={[{ dataKey: 'count', color: '#3b82f6', name: 'Cases' }]}
           xAxisKey="status"
           loading={loading}
         />
       </div>
 
+      {/* Heatmap */}
       <div className="mb-8">
-        <BarChartCard
-          title="By Age Group"
-          data={ageChartData}
-          bars={[{ dataKey: 'count', color: '#8b5cf6', name: 'Count' }]}
-          xAxisKey="age_group"
+        <HeatmapChart
+          title={heatmapData?.title || "Hospitalizations by Week and Age Group"}
+          xLabels={heatmapData?.x_labels || []}
+          yLabels={heatmapData?.y_labels || []}
+          data={heatmapData?.data_matrix || []}
           loading={loading}
         />
       </div>
 
       <DataTable
-        title="Hospitalization Trend Records"
-        data={data}
+        title="Hospitalization Records"
+        data={safeData}
         columns={[
-          { key: 'date', header: 'Date' },
+          { key: 'epi_week', header: 'Epi Week' },
+          { key: 'epi_year', header: 'Year' },
           { key: 'clinical_status', header: 'Clinical Status' },
-          { key: 'age_group', header: 'Age Group' },
-          { key: 'count', header: 'Count', render: (item) => (item.count || 0).toLocaleString() },
+          { key: 'age_groups', header: 'Age Group' },
+          { key: 'total_count', header: 'Count', render: (item) => (item.total_count || 0).toFixed(1) },
         ]}
         loading={loading}
       />

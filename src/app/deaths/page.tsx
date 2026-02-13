@@ -1,24 +1,34 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Skull, RefreshCw } from 'lucide-react';
+import { useEffect, useState, useMemo } from 'react';
+import { Skull, RefreshCw, TrendingDown, Calendar } from 'lucide-react';
 import { StatCard, LineChartCard, DataTable, BarChartCard } from '@/components';
-import { apiService, MonthlyDeath, DeathsByAge } from '@/lib/api';
+import { apiService, MonthlyDeath, MonthlyDeathsResponse } from '@/lib/api';
+
+// Month order for sorting
+const monthOrder: Record<string, number> = {
+  'Jan': 1, 'Feb': 2, 'Mar': 3, 'Apr': 4, 'May': 5, 'Jun': 6,
+  'Jul': 7, 'Aug': 8, 'Sep': 9, 'Oct': 10, 'Nov': 11, 'Dec': 12
+};
+
+function sortByMonth(a: string, b: string): number {
+  const [aMonth, aYear] = a.split(' ');
+  const [bMonth, bYear] = b.split(' ');
+  const aYearNum = parseInt(aYear) || 0;
+  const bYearNum = parseInt(bYear) || 0;
+  if (aYearNum !== bYearNum) return aYearNum - bYearNum;
+  return (monthOrder[aMonth] || 0) - (monthOrder[bMonth] || 0);
+}
 
 export default function DeathsPage() {
-  const [data, setData] = useState<MonthlyDeath[]>([]);
-  const [deathsByAge, setDeathsByAge] = useState<DeathsByAge[]>([]);
+  const [response, setResponse] = useState<MonthlyDeathsResponse | null>(null);
   const [loading, setLoading] = useState(true);
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const [monthlyData, ageData] = await Promise.all([
-        apiService.getMonthlyDeaths(),
-        apiService.getDeathsByAge(),
-      ]);
-      setData(monthlyData);
-      setDeathsByAge(ageData);
+      const result = await apiService.getMonthlyDeaths();
+      setResponse(result);
     } catch (error) {
       console.error('Error loading deaths data:', error);
     } finally {
@@ -30,25 +40,43 @@ export default function DeathsPage() {
     loadData();
   }, []);
 
-  const totalDeaths = data.reduce((sum, r) => sum + (r.deaths || 0), 0);
-  const latestMonth = data.length > 0 ? data[data.length - 1] : null;
+  // Extract data from response
+  const rawData: MonthlyDeath[] = Array.isArray(response?.data) ? response.data : [];
+  const summary = response?.summary;
 
-  const chartData = data.map((r) => ({
-    month: r.month || '',
-    deaths: r.deaths || 0,
-  }));
+  // Group deaths by month for line chart
+  const monthlyTotals = useMemo(() => {
+    const totals: Record<string, number> = {};
+    rawData.forEach(r => {
+      const month = r.as_of_month || 'Unknown';
+      totals[month] = (totals[month] || 0) + (r.total_deaths || 0);
+    });
+    return Object.entries(totals)
+      .map(([month, deaths]) => ({ month, deaths }))
+      .sort((a, b) => sortByMonth(a.month, b.month));
+  }, [rawData]);
 
-  const ageChartData = deathsByAge.map((r) => ({
-    age_group: r.age_group || 'Unknown',
-    deaths: r.deaths || 0,
-  }));
+  // Group deaths by age group for bar chart
+  const ageGroupTotals = useMemo(() => {
+    const totals: Record<string, number> = {};
+    rawData.forEach(r => {
+      const age = r.age_groups || 'Unknown';
+      totals[age] = (totals[age] || 0) + (r.total_deaths || 0);
+    });
+    return Object.entries(totals)
+      .map(([age_group, deaths]) => ({ age_group, deaths }))
+      .sort((a, b) => b.deaths - a.deaths);
+  }, [rawData]);
+
+  const totalDeaths = summary?.total_deaths || 0;
+  const totalRecords = summary?.total_records || rawData.length;
 
   return (
     <div>
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Deaths Data</h1>
-          <p className="text-slate-500">Track and analyze COVID-19 mortality data</p>
+          <p className="text-slate-500">COVID-19 mortality data by month and age group</p>
         </div>
         <button
           onClick={loadData}
@@ -61,24 +89,37 @@ export default function DeathsPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-        <StatCard title="Total Deaths" value={totalDeaths} icon={Skull} color="red" />
-        <StatCard title="Latest Month" value={latestMonth?.month || '-'} icon={Skull} color="purple" />
-        <StatCard title="Age Groups" value={deathsByAge.length} icon={Skull} color="blue" />
+        <StatCard 
+          title="Total Deaths" 
+          value={totalDeaths.toLocaleString()} 
+          icon={Skull} 
+          color="red" 
+        />
+        <StatCard 
+          title="Months Tracked" 
+          value={monthlyTotals.length} 
+          icon={Calendar} 
+          color="purple" 
+        />
+        <StatCard 
+          title="Age Groups" 
+          value={ageGroupTotals.length} 
+          icon={TrendingDown} 
+          color="blue" 
+        />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
         <LineChartCard
           title="Monthly Deaths Trend"
-          data={chartData}
-          lines={[
-            { dataKey: 'deaths', color: '#ef4444', name: 'Deaths' },
-          ]}
+          data={monthlyTotals}
+          lines={[{ dataKey: 'deaths', color: '#ef4444', name: 'Deaths' }]}
           xAxisKey="month"
           loading={loading}
         />
         <BarChartCard
           title="Deaths by Age Group"
-          data={ageChartData}
+          data={ageGroupTotals}
           bars={[{ dataKey: 'deaths', color: '#8b5cf6', name: 'Deaths' }]}
           xAxisKey="age_group"
           loading={loading}
@@ -86,11 +127,12 @@ export default function DeathsPage() {
       </div>
 
       <DataTable
-        title="Monthly Death Records"
-        data={data}
+        title="Monthly Death Records by Age Group"
+        data={rawData}
         columns={[
-          { key: 'month', header: 'Month' },
-          { key: 'deaths', header: 'Deaths', render: (item) => (item.deaths || 0).toLocaleString() },
+          { key: 'as_of_month', header: 'Month' },
+          { key: 'age_groups', header: 'Age Group' },
+          { key: 'total_deaths', header: 'Deaths', render: (item) => (item.total_deaths || 0).toLocaleString() },
         ]}
         loading={loading}
       />

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Activity, Skull, Heart, Syringe, Building2, Hospital, RefreshCw } from 'lucide-react';
 import { StatCard, LineChartCard, BarChartCard, PieChartCard } from '@/components';
 import { 
@@ -19,7 +19,16 @@ import {
 
 interface DashboardData {
   infections: WeeklyInfection[];
+  infectionsSummary?: {
+    total_records?: number;
+    total_infections?: number;
+    average_weekly?: number;
+  };
   deaths: MonthlyDeath[];
+  deathsSummary?: {
+    total_records?: number;
+    total_deaths?: number;
+  };
   icu: ICUUtilization[];
   vaccination: VaccinationProgress[];
   hospitalizations: HospitalizationTrend[];
@@ -33,7 +42,9 @@ interface DashboardData {
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData>({
     infections: [],
+    infectionsSummary: undefined,
     deaths: [],
+    deathsSummary: undefined,
     icu: [],
     vaccination: [],
     hospitalizations: [],
@@ -65,38 +76,75 @@ export default function DashboardPage() {
     return () => clearInterval(interval);
   }, []);
 
-  // Calculate summary statistics
-  const totalCases = data.infections.reduce((sum, r) => sum + (r.cases || 0), 0);
-  const totalDeaths = data.deaths.reduce((sum, r) => sum + (r.deaths || 0), 0);
-  const avgICUUtilization = data.icu.length > 0 
-    ? data.icu.reduce((sum, r) => sum + (r.utilization_rate || 0), 0) / data.icu.length 
+  // Ensure all data arrays are safe
+  const safeInfections = Array.isArray(data.infections) ? data.infections : [];
+  const safeDeaths = Array.isArray(data.deaths) ? data.deaths : [];
+  const safeIcu = Array.isArray(data.icu) ? data.icu : [];
+  const safeVaccination = Array.isArray(data.vaccination) ? data.vaccination : [];
+  const safeHospitalizations = Array.isArray(data.hospitalizations) ? data.hospitalizations : [];
+  const safeClinics = Array.isArray(data.clinics) ? data.clinics : [];
+  const safeInfectionsTimeseries = Array.isArray(data.infectionsTimeseries) ? data.infectionsTimeseries : [];
+  const safeDeathsByAge = Array.isArray(data.deathsByAge) ? data.deathsByAge : [];
+  const safeIcuStatus = Array.isArray(data.icuStatus) ? data.icuStatus : [];
+  const safeVaccinationUptake = Array.isArray(data.vaccinationUptake) ? data.vaccinationUptake : [];
+
+  // Calculate summary statistics - use API summary when available
+  const totalCases = data.infectionsSummary?.total_infections || 
+    safeInfections.reduce((sum, r) => sum + (r.est_count || 0), 0);
+  const totalDeaths = data.deathsSummary?.total_deaths || 
+    safeDeaths.reduce((sum, r) => sum + (r.total_deaths || 0), 0);
+  
+  // Calculate avg COVID beds from ICU data
+  const covidIcuData = safeIcu.filter(r => r.status?.toLowerCase() === 'covid');
+  const avgCovidBeds = covidIcuData.length > 0 
+    ? covidIcuData.reduce((sum, r) => sum + (r.avg_beds || 0), 0) / covidIcuData.length 
     : 0;
-  const totalVaccinations = data.vaccination.reduce((sum, r) => sum + (r.doses_administered || 0), 0);
-  const totalHospitalizations = data.hospitalizations.reduce((sum, r) => sum + (r.count || 0), 0);
-  const totalClinics = data.clinics.length;
+  
+  // Get latest vaccination data (sorted by date, get last entry)
+  const sortedVaccination = [...safeVaccination].sort((a, b) => 
+    (a.vacc_date || '').localeCompare(b.vacc_date || '')
+  );
+  const latestVaccination = sortedVaccination.length > 0 ? sortedVaccination[sortedVaccination.length - 1] : null;
+  const vaccinationUptake = latestVaccination?.received_one_dose_pcttakeup || 0;
+  const totalHospitalizations = safeHospitalizations.reduce((sum, r) => sum + (r.total_count || 0), 0);
+  const totalClinics = safeClinics.length;
 
   // Prepare chart data from visualization endpoints
-  const infectionChartData = data.infectionsTimeseries.map((r) => ({
-    date: r.date || '',
-    cases: r.cases || 0,
+  const infectionChartData = safeInfectionsTimeseries.map((r) => ({
+    epi_week: r.epi_week || '',
+    cases: r.est_count || 0,
   }));
 
-  const vaccinationChartData = data.vaccinationUptake.map((r) => ({
-    date: r.date || '',
-    uptake: r.uptake || 0,
+  // Vaccination progress chart data - show uptake percentages over time
+  const vaccinationChartData = sortedVaccination.slice(-60).map((r) => ({
+    date: r.vacc_date || '',
+    'One Dose %': r.received_one_dose_pcttakeup || 0,
+    'Full Regimen %': r.full_regimen_pcttakeup || 0,
   }));
 
-  // Deaths by age for bar chart
-  const deathsByAgeData = data.deathsByAge.map((r) => ({
-    age_group: r.age_group || 'Unknown',
-    deaths: r.deaths || 0,
-  }));
+  // Aggregate deaths by age group from monthly deaths data
+  const deathsByAgeData = useMemo(() => {
+    const totals: Record<string, number> = {};
+    safeDeaths.forEach(r => {
+      const age = r.age_groups || 'Unknown';
+      totals[age] = (totals[age] || 0) + (r.total_deaths || 0);
+    });
+    return Object.entries(totals)
+      .map(([age_group, deaths]) => ({ age_group, deaths }))
+      .sort((a, b) => b.deaths - a.deaths);
+  }, [safeDeaths]);
 
-  // ICU status distribution for pie chart
-  const icuStatusData = data.icuStatus.map((r) => ({
-    name: r.status || 'Unknown',
-    value: r.count || 0,
-  }));
+  // ICU status distribution for pie chart - aggregate from ICU data
+  const icuStatusData = useMemo(() => {
+    const totals: Record<string, number> = {};
+    safeIcu.forEach(r => {
+      const status = r.status || 'Unknown';
+      totals[status] = (totals[status] || 0) + (r.avg_beds || 0);
+    });
+    return Object.entries(totals)
+      .map(([name, value]) => ({ name, value: Math.round(value) }))
+      .sort((a, b) => b.value - a.value);
+  }, [safeIcu]);
 
   return (
     <div>
@@ -135,14 +183,14 @@ export default function DashboardPage() {
           color="purple"
         />
         <StatCard
-          title="ICU Utilization"
-          value={`${avgICUUtilization.toFixed(1)}%`}
+          title="Avg COVID Beds"
+          value={avgCovidBeds.toFixed(1)}
           icon={Heart}
           color="yellow"
         />
         <StatCard
-          title="Vaccinations"
-          value={totalVaccinations}
+          title="Vacc. Uptake"
+          value={`${vaccinationUptake.toFixed(1)}%`}
           icon={Syringe}
           color="green"
         />
@@ -168,13 +216,15 @@ export default function DashboardPage() {
           lines={[
             { dataKey: 'cases', color: '#ef4444', name: 'Cases' },
           ]}
+          xAxisKey="epi_week"
           loading={loading}
         />
         <LineChartCard
           title="Vaccination Uptake Trend"
           data={vaccinationChartData}
           lines={[
-            { dataKey: 'uptake', color: '#10b981', name: 'Uptake' },
+            { dataKey: 'One Dose %', color: '#10b981', name: 'One Dose %' },
+            { dataKey: 'Full Regimen %', color: '#3b82f6', name: 'Full Regimen %' },
           ]}
           loading={loading}
         />
