@@ -12,71 +12,113 @@ const api = axios.create({
 
 // Types for API responses
 export interface UploadResponse {
+  status: string;
+  message: string;
   request_id: string;
   records_received: number;
-  status: string;
 }
 
-export interface InfectionRecord {
-  id?: number;
-  date: string;
-  region: string;
-  cases: number;
-  recovered?: number;
-  active?: number;
+// Analytics types
+export interface WeeklyInfection {
+  epi_year?: number;
+  epi_week?: number;
+  cases?: number;
+  [key: string]: unknown;
 }
 
-export interface DeathRecord {
-  id?: number;
-  date: string;
-  region: string;
-  deaths: number;
-  cumulative_deaths?: number;
+export interface HospitalizationTrend {
+  date?: string;
+  clinical_status?: string;
+  age_group?: string;
+  count?: number;
+  [key: string]: unknown;
 }
 
-export interface ICURecord {
-  id?: number;
-  date: string;
-  region: string;
-  icu_patients: number;
-  capacity?: number;
+export interface MonthlyDeath {
+  month?: string;
+  deaths?: number;
+  [key: string]: unknown;
+}
+
+export interface ICUUtilization {
+  epi_week?: string;
+  beds_available?: number;
+  beds_occupied?: number;
   utilization_rate?: number;
+  [key: string]: unknown;
 }
 
-export interface VaccinationRecord {
-  id?: number;
-  date: string;
-  region: string;
-  doses_administered: number;
+export interface VaccinationProgress {
+  date?: string;
+  doses_administered?: number;
   first_dose?: number;
   second_dose?: number;
   booster?: number;
+  [key: string]: unknown;
 }
 
-export interface HospitalizationRecord {
-  id?: number;
-  date: string;
-  region: string;
-  hospitalizations: number;
-  discharged?: number;
-  current_patients?: number;
+export interface VaccinationByAge {
+  age_group?: string;
+  vaccinated?: number;
+  unvaccinated?: number;
+  [key: string]: unknown;
 }
 
-export interface ClinicRecord {
-  id?: number;
-  name: string;
-  region: string;
+export interface Clinic {
+  name?: string;
   address?: string;
-  capacity?: number;
-  type?: string;
+  city?: string;
+  phone?: string;
+  [key: string]: unknown;
 }
 
-export type DataType = 'infections' | 'deaths' | 'icu' | 'vaccination' | 'hospitalizations' | 'clinics';
+// Visualization types
+export interface InfectionTimeseries {
+  date?: string;
+  cases?: number;
+  [key: string]: unknown;
+}
+
+export interface DeathsByAge {
+  age_group?: string;
+  deaths?: number;
+  [key: string]: unknown;
+}
+
+export interface ICUStatusDistribution {
+  status?: string;
+  count?: number;
+  [key: string]: unknown;
+}
+
+export interface VaccinationUptakeTrend {
+  date?: string;
+  uptake?: number;
+  [key: string]: unknown;
+}
+
+export interface HospitalizationHeatmap {
+  date?: string;
+  age_group?: string;
+  value?: number;
+  [key: string]: unknown;
+}
+
+// Upload data types
+export type UploadDataType = 
+  | 'infections'
+  | 'deaths'
+  | 'hospitalizations'
+  | 'icu-utilization'
+  | 'new-admissions'
+  | 'vaccination-progress'
+  | 'vaccination-by-age'
+  | 'clinics';
 
 // API Functions
 export const apiService = {
-  // Upload CSV file
-  async uploadData(dataType: DataType, file: File): Promise<UploadResponse> {
+  // ============ Upload endpoints ============
+  async uploadData(dataType: UploadDataType, file: File): Promise<UploadResponse> {
     const formData = new FormData();
     formData.append('file', file);
     
@@ -88,54 +130,106 @@ export const apiService = {
     return response.data;
   },
 
-  // Get infections data
-  async getInfections(): Promise<InfectionRecord[]> {
-    const response = await api.get<InfectionRecord[]>('/api/infections');
+  // ============ Analytics endpoints ============
+  async getWeeklyInfections(params?: { epi_year?: number; limit?: number }): Promise<WeeklyInfection[]> {
+    const response = await api.get<WeeklyInfection[]>('/api/analytics/infections/weekly', { params });
     return response.data;
   },
 
-  // Get deaths data
-  async getDeaths(): Promise<DeathRecord[]> {
-    const response = await api.get<DeathRecord[]>('/api/deaths');
+  async getHospitalizationTrend(params?: { clinical_status?: string; age_group?: string }): Promise<HospitalizationTrend[]> {
+    const response = await api.get<HospitalizationTrend[]>('/api/analytics/hospitalizations/trend', { params });
     return response.data;
   },
 
-  // Get ICU data
-  async getICU(): Promise<ICURecord[]> {
-    const response = await api.get<ICURecord[]>('/api/icu');
+  async getMonthlyDeaths(params?: { month?: string }): Promise<MonthlyDeath[]> {
+    const response = await api.get<MonthlyDeath[]>('/api/analytics/deaths/monthly', { params });
     return response.data;
   },
 
-  // Get vaccination data
-  async getVaccination(): Promise<VaccinationRecord[]> {
-    const response = await api.get<VaccinationRecord[]>('/api/vaccination');
+  async getICUUtilization(params?: { epi_week?: string }): Promise<ICUUtilization[]> {
+    const response = await api.get<ICUUtilization[]>('/api/analytics/icu/utilization', { params });
     return response.data;
   },
 
-  // Get hospitalizations data
-  async getHospitalizations(): Promise<HospitalizationRecord[]> {
-    const response = await api.get<HospitalizationRecord[]>('/api/hospitalizations');
+  async getVaccinationProgress(params?: { start_date?: string; end_date?: string; limit?: number }): Promise<VaccinationProgress[]> {
+    const response = await api.get<VaccinationProgress[]>('/api/analytics/vaccination/progress', { params });
     return response.data;
   },
 
-  // Get clinics data
-  async getClinics(): Promise<ClinicRecord[]> {
-    const response = await api.get<ClinicRecord[]>('/api/clinics');
+  async getVaccinationByAge(): Promise<VaccinationByAge[]> {
+    const response = await api.get<VaccinationByAge[]>('/api/analytics/vaccination/by-age');
     return response.data;
   },
 
-  // Get all data
+  async getClinics(params?: { search?: string }): Promise<Clinic[]> {
+    const response = await api.get<Clinic[]>('/api/analytics/clinics', { params });
+    return response.data;
+  },
+
+  // ============ Visualization endpoints ============
+  async getInfectionsTimeseries(): Promise<InfectionTimeseries[]> {
+    const response = await api.get<InfectionTimeseries[]>('/api/viz/infections/timeseries');
+    return response.data;
+  },
+
+  async getDeathsByAge(): Promise<DeathsByAge[]> {
+    const response = await api.get<DeathsByAge[]>('/api/viz/deaths/by-age');
+    return response.data;
+  },
+
+  async getICUStatusDistribution(): Promise<ICUStatusDistribution[]> {
+    const response = await api.get<ICUStatusDistribution[]>('/api/viz/icu/status-distribution');
+    return response.data;
+  },
+
+  async getVaccinationUptakeTrend(): Promise<VaccinationUptakeTrend[]> {
+    const response = await api.get<VaccinationUptakeTrend[]>('/api/viz/vaccination/uptake-trend');
+    return response.data;
+  },
+
+  async getHospitalizationHeatmap(): Promise<HospitalizationHeatmap[]> {
+    const response = await api.get<HospitalizationHeatmap[]>('/api/viz/hospitalizations/heatmap');
+    return response.data;
+  },
+
+  // ============ Get all dashboard data ============
   async getAllData() {
-    const [infections, deaths, icu, vaccination, hospitalizations, clinics] = await Promise.all([
-      this.getInfections().catch(() => []),
-      this.getDeaths().catch(() => []),
-      this.getICU().catch(() => []),
-      this.getVaccination().catch(() => []),
-      this.getHospitalizations().catch(() => []),
+    const [
+      infections,
+      deaths,
+      icu,
+      vaccination,
+      hospitalizations,
+      clinics,
+      infectionsTimeseries,
+      deathsByAge,
+      icuStatus,
+      vaccinationUptake,
+    ] = await Promise.all([
+      this.getWeeklyInfections().catch(() => []),
+      this.getMonthlyDeaths().catch(() => []),
+      this.getICUUtilization().catch(() => []),
+      this.getVaccinationProgress().catch(() => []),
+      this.getHospitalizationTrend().catch(() => []),
       this.getClinics().catch(() => []),
+      this.getInfectionsTimeseries().catch(() => []),
+      this.getDeathsByAge().catch(() => []),
+      this.getICUStatusDistribution().catch(() => []),
+      this.getVaccinationUptakeTrend().catch(() => []),
     ]);
-    
-    return { infections, deaths, icu, vaccination, hospitalizations, clinics };
+
+    return {
+      infections,
+      deaths,
+      icu,
+      vaccination,
+      hospitalizations,
+      clinics,
+      infectionsTimeseries,
+      deathsByAge,
+      icuStatus,
+      vaccinationUptake,
+    };
   },
 };
 

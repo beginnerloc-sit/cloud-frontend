@@ -2,16 +2,32 @@
 
 import { useEffect, useState } from 'react';
 import { Activity, Skull, Heart, Syringe, Building2, Hospital, RefreshCw } from 'lucide-react';
-import { StatCard, LineChartCard, BarChartCard } from '@/components';
-import { apiService, InfectionRecord, DeathRecord, ICURecord, VaccinationRecord, HospitalizationRecord, ClinicRecord } from '@/lib/api';
+import { StatCard, LineChartCard, BarChartCard, PieChartCard } from '@/components';
+import { 
+  apiService, 
+  WeeklyInfection, 
+  MonthlyDeath, 
+  ICUUtilization, 
+  VaccinationProgress, 
+  HospitalizationTrend, 
+  Clinic,
+  InfectionTimeseries,
+  DeathsByAge,
+  ICUStatusDistribution,
+  VaccinationUptakeTrend
+} from '@/lib/api';
 
 interface DashboardData {
-  infections: InfectionRecord[];
-  deaths: DeathRecord[];
-  icu: ICURecord[];
-  vaccination: VaccinationRecord[];
-  hospitalizations: HospitalizationRecord[];
-  clinics: ClinicRecord[];
+  infections: WeeklyInfection[];
+  deaths: MonthlyDeath[];
+  icu: ICUUtilization[];
+  vaccination: VaccinationProgress[];
+  hospitalizations: HospitalizationTrend[];
+  clinics: Clinic[];
+  infectionsTimeseries: InfectionTimeseries[];
+  deathsByAge: DeathsByAge[];
+  icuStatus: ICUStatusDistribution[];
+  vaccinationUptake: VaccinationUptakeTrend[];
 }
 
 export default function DashboardPage() {
@@ -22,6 +38,10 @@ export default function DashboardPage() {
     vaccination: [],
     hospitalizations: [],
     clinics: [],
+    infectionsTimeseries: [],
+    deathsByAge: [],
+    icuStatus: [],
+    vaccinationUptake: [],
   });
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
@@ -41,7 +61,6 @@ export default function DashboardPage() {
 
   useEffect(() => {
     loadData();
-    // Refresh every 60 seconds
     const interval = setInterval(loadData, 60000);
     return () => clearInterval(interval);
   }, []);
@@ -49,32 +68,34 @@ export default function DashboardPage() {
   // Calculate summary statistics
   const totalCases = data.infections.reduce((sum, r) => sum + (r.cases || 0), 0);
   const totalDeaths = data.deaths.reduce((sum, r) => sum + (r.deaths || 0), 0);
-  const totalICU = data.icu.reduce((sum, r) => sum + (r.icu_patients || 0), 0);
+  const avgICUUtilization = data.icu.length > 0 
+    ? data.icu.reduce((sum, r) => sum + (r.utilization_rate || 0), 0) / data.icu.length 
+    : 0;
   const totalVaccinations = data.vaccination.reduce((sum, r) => sum + (r.doses_administered || 0), 0);
-  const totalHospitalizations = data.hospitalizations.reduce((sum, r) => sum + (r.hospitalizations || 0), 0);
+  const totalHospitalizations = data.hospitalizations.reduce((sum, r) => sum + (r.count || 0), 0);
   const totalClinics = data.clinics.length;
 
-  // Prepare chart data - aggregate by date
-  const infectionChartData = data.infections.slice(-30).map((r) => ({
-    date: r.date,
-    cases: r.cases,
-    recovered: r.recovered || 0,
+  // Prepare chart data from visualization endpoints
+  const infectionChartData = data.infectionsTimeseries.map((r) => ({
+    date: r.date || '',
+    cases: r.cases || 0,
   }));
 
-  const vaccinationChartData = data.vaccination.slice(-30).map((r) => ({
-    date: r.date,
-    doses: r.doses_administered,
+  const vaccinationChartData = data.vaccinationUptake.map((r) => ({
+    date: r.date || '',
+    uptake: r.uptake || 0,
   }));
 
-  // Aggregate by region for bar chart
-  const regionData = data.infections.reduce((acc: Record<string, number>, r) => {
-    acc[r.region] = (acc[r.region] || 0) + r.cases;
-    return acc;
-  }, {});
+  // Deaths by age for bar chart
+  const deathsByAgeData = data.deathsByAge.map((r) => ({
+    age_group: r.age_group || 'Unknown',
+    deaths: r.deaths || 0,
+  }));
 
-  const regionChartData = Object.entries(regionData).map(([region, cases]) => ({
-    region,
-    cases,
+  // ICU status distribution for pie chart
+  const icuStatusData = data.icuStatus.map((r) => ({
+    name: r.status || 'Unknown',
+    value: r.count || 0,
   }));
 
   return (
@@ -82,7 +103,7 @@ export default function DashboardPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Health Analytics Dashboard</h1>
+          <h1 className="text-2xl font-bold text-slate-900">COVID-19 Analytics Dashboard</h1>
           <p className="text-slate-500">
             {lastUpdated 
               ? `Last updated: ${lastUpdated.toLocaleTimeString()}`
@@ -114,8 +135,8 @@ export default function DashboardPage() {
           color="purple"
         />
         <StatCard
-          title="ICU Patients"
-          value={totalICU}
+          title="ICU Utilization"
+          value={`${avgICUUtilization.toFixed(1)}%`}
           icon={Heart}
           color="yellow"
         />
@@ -145,16 +166,15 @@ export default function DashboardPage() {
           title="Infection Trends"
           data={infectionChartData}
           lines={[
-            { dataKey: 'cases', color: '#ef4444', name: 'New Cases' },
-            { dataKey: 'recovered', color: '#10b981', name: 'Recovered' },
+            { dataKey: 'cases', color: '#ef4444', name: 'Cases' },
           ]}
           loading={loading}
         />
         <LineChartCard
-          title="Vaccination Progress"
+          title="Vaccination Uptake Trend"
           data={vaccinationChartData}
           lines={[
-            { dataKey: 'doses', color: '#3b82f6', name: 'Doses Administered' },
+            { dataKey: 'uptake', color: '#10b981', name: 'Uptake' },
           ]}
           loading={loading}
         />
@@ -162,43 +182,19 @@ export default function DashboardPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <BarChartCard
-          title="Cases by Region"
-          data={regionChartData.slice(0, 10)}
+          title="Deaths by Age Group"
+          data={deathsByAgeData}
           bars={[
-            { dataKey: 'cases', color: '#ef4444', name: 'Total Cases' },
+            { dataKey: 'deaths', color: '#8b5cf6', name: 'Deaths' },
           ]}
-          xAxisKey="region"
+          xAxisKey="age_group"
           loading={loading}
         />
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-          <h3 className="text-lg font-semibold text-slate-900 mb-4">Quick Stats</h3>
-          <div className="space-y-4">
-            <div className="flex justify-between items-center py-2 border-b border-slate-100">
-              <span className="text-slate-600">Total Records</span>
-              <span className="font-semibold text-slate-900">
-                {data.infections.length + data.deaths.length + data.icu.length + 
-                 data.vaccination.length + data.hospitalizations.length + data.clinics.length}
-              </span>
-            </div>
-            <div className="flex justify-between items-center py-2 border-b border-slate-100">
-              <span className="text-slate-600">Regions Covered</span>
-              <span className="font-semibold text-slate-900">
-                {new Set(data.infections.map(r => r.region)).size}
-              </span>
-            </div>
-            <div className="flex justify-between items-center py-2 border-b border-slate-100">
-              <span className="text-slate-600">Data Types</span>
-              <span className="font-semibold text-slate-900">6</span>
-            </div>
-            <div className="flex justify-between items-center py-2">
-              <span className="text-slate-600">API Status</span>
-              <span className="inline-flex items-center gap-1 text-green-600">
-                <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-                Connected
-              </span>
-            </div>
-          </div>
-        </div>
+        <PieChartCard
+          title="ICU Status Distribution"
+          data={icuStatusData}
+          loading={loading}
+        />
       </div>
     </div>
   );

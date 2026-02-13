@@ -3,17 +3,22 @@
 import { useEffect, useState } from 'react';
 import { Activity, RefreshCw } from 'lucide-react';
 import { StatCard, LineChartCard, DataTable, BarChartCard } from '@/components';
-import { apiService, InfectionRecord } from '@/lib/api';
+import { apiService, WeeklyInfection, InfectionTimeseries } from '@/lib/api';
 
 export default function InfectionsPage() {
-  const [data, setData] = useState<InfectionRecord[]>([]);
+  const [data, setData] = useState<WeeklyInfection[]>([]);
+  const [timeseries, setTimeseries] = useState<InfectionTimeseries[]>([]);
   const [loading, setLoading] = useState(true);
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const result = await apiService.getInfections();
-      setData(result);
+      const [weeklyData, timeseriesData] = await Promise.all([
+        apiService.getWeeklyInfections(),
+        apiService.getInfectionsTimeseries(),
+      ]);
+      setData(weeklyData);
+      setTimeseries(timeseriesData);
     } catch (error) {
       console.error('Error loading infections data:', error);
     } finally {
@@ -26,32 +31,30 @@ export default function InfectionsPage() {
   }, []);
 
   const totalCases = data.reduce((sum, r) => sum + (r.cases || 0), 0);
-  const totalRecovered = data.reduce((sum, r) => sum + (r.recovered || 0), 0);
-  const totalActive = data.reduce((sum, r) => sum + (r.active || 0), 0);
+  const latestWeek = data.length > 0 ? data[data.length - 1] : null;
 
-  const chartData = data.slice(-30).map((r) => ({
-    date: r.date,
-    cases: r.cases,
-    recovered: r.recovered || 0,
-    active: r.active || 0,
+  const chartData = timeseries.map((r) => ({
+    date: r.date || '',
+    cases: r.cases || 0,
   }));
 
-  const regionData = data.reduce((acc: Record<string, number>, r) => {
-    acc[r.region] = (acc[r.region] || 0) + r.cases;
+  // Group by epi_year for bar chart
+  const yearData = data.reduce((acc: Record<number, number>, r) => {
+    const year = r.epi_year || 0;
+    acc[year] = (acc[year] || 0) + (r.cases || 0);
     return acc;
   }, {});
 
-  const regionChartData = Object.entries(regionData)
-    .map(([region, cases]) => ({ region, cases }))
-    .sort((a, b) => b.cases - a.cases)
-    .slice(0, 10);
+  const yearChartData = Object.entries(yearData)
+    .map(([year, cases]) => ({ year, cases }))
+    .sort((a, b) => Number(a.year) - Number(b.year));
 
   return (
     <div>
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Infections Data</h1>
-          <p className="text-slate-500">Track and analyze infection cases</p>
+          <p className="text-slate-500">Track and analyze COVID-19 infection cases by epidemiological week</p>
         </div>
         <button
           onClick={loadData}
@@ -65,8 +68,8 @@ export default function InfectionsPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
         <StatCard title="Total Cases" value={totalCases} icon={Activity} color="red" />
-        <StatCard title="Recovered" value={totalRecovered} icon={Activity} color="green" />
-        <StatCard title="Active Cases" value={totalActive} icon={Activity} color="yellow" />
+        <StatCard title="Latest Epi Week" value={latestWeek?.epi_week || '-'} icon={Activity} color="blue" />
+        <StatCard title="Latest Epi Year" value={latestWeek?.epi_year || '-'} icon={Activity} color="green" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
@@ -74,30 +77,26 @@ export default function InfectionsPage() {
           title="Infection Trends Over Time"
           data={chartData}
           lines={[
-            { dataKey: 'cases', color: '#ef4444', name: 'New Cases' },
-            { dataKey: 'recovered', color: '#10b981', name: 'Recovered' },
-            { dataKey: 'active', color: '#f59e0b', name: 'Active' },
+            { dataKey: 'cases', color: '#ef4444', name: 'Cases' },
           ]}
           loading={loading}
         />
         <BarChartCard
-          title="Cases by Region"
-          data={regionChartData}
+          title="Cases by Year"
+          data={yearChartData}
           bars={[{ dataKey: 'cases', color: '#ef4444', name: 'Total Cases' }]}
-          xAxisKey="region"
+          xAxisKey="year"
           loading={loading}
         />
       </div>
 
       <DataTable
-        title="Infection Records"
+        title="Weekly Infection Records"
         data={data.slice(-100)}
         columns={[
-          { key: 'date', header: 'Date' },
-          { key: 'region', header: 'Region' },
-          { key: 'cases', header: 'Cases', render: (item) => item.cases.toLocaleString() },
-          { key: 'recovered', header: 'Recovered', render: (item) => (item.recovered || 0).toLocaleString() },
-          { key: 'active', header: 'Active', render: (item) => (item.active || 0).toLocaleString() },
+          { key: 'epi_year', header: 'Epi Year' },
+          { key: 'epi_week', header: 'Epi Week' },
+          { key: 'cases', header: 'Cases', render: (item) => (item.cases || 0).toLocaleString() },
         ]}
         loading={loading}
       />

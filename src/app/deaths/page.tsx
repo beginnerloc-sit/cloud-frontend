@@ -3,17 +3,22 @@
 import { useEffect, useState } from 'react';
 import { Skull, RefreshCw } from 'lucide-react';
 import { StatCard, LineChartCard, DataTable, BarChartCard } from '@/components';
-import { apiService, DeathRecord } from '@/lib/api';
+import { apiService, MonthlyDeath, DeathsByAge } from '@/lib/api';
 
 export default function DeathsPage() {
-  const [data, setData] = useState<DeathRecord[]>([]);
+  const [data, setData] = useState<MonthlyDeath[]>([]);
+  const [deathsByAge, setDeathsByAge] = useState<DeathsByAge[]>([]);
   const [loading, setLoading] = useState(true);
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const result = await apiService.getDeaths();
-      setData(result);
+      const [monthlyData, ageData] = await Promise.all([
+        apiService.getMonthlyDeaths(),
+        apiService.getDeathsByAge(),
+      ]);
+      setData(monthlyData);
+      setDeathsByAge(ageData);
     } catch (error) {
       console.error('Error loading deaths data:', error);
     } finally {
@@ -26,30 +31,24 @@ export default function DeathsPage() {
   }, []);
 
   const totalDeaths = data.reduce((sum, r) => sum + (r.deaths || 0), 0);
-  const latestCumulative = data.length > 0 ? (data[data.length - 1].cumulative_deaths || totalDeaths) : 0;
+  const latestMonth = data.length > 0 ? data[data.length - 1] : null;
 
-  const chartData = data.slice(-30).map((r) => ({
-    date: r.date,
-    deaths: r.deaths,
-    cumulative: r.cumulative_deaths || 0,
+  const chartData = data.map((r) => ({
+    month: r.month || '',
+    deaths: r.deaths || 0,
   }));
 
-  const regionData = data.reduce((acc: Record<string, number>, r) => {
-    acc[r.region] = (acc[r.region] || 0) + r.deaths;
-    return acc;
-  }, {});
-
-  const regionChartData = Object.entries(regionData)
-    .map(([region, deaths]) => ({ region, deaths }))
-    .sort((a, b) => b.deaths - a.deaths)
-    .slice(0, 10);
+  const ageChartData = deathsByAge.map((r) => ({
+    age_group: r.age_group || 'Unknown',
+    deaths: r.deaths || 0,
+  }));
 
   return (
     <div>
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Deaths Data</h1>
-          <p className="text-slate-500">Track and analyze mortality data</p>
+          <p className="text-slate-500">Track and analyze COVID-19 mortality data</p>
         </div>
         <button
           onClick={loadData}
@@ -61,38 +60,37 @@ export default function DeathsPage() {
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
         <StatCard title="Total Deaths" value={totalDeaths} icon={Skull} color="red" />
-        <StatCard title="Cumulative Deaths" value={latestCumulative} icon={Skull} color="purple" />
+        <StatCard title="Latest Month" value={latestMonth?.month || '-'} icon={Skull} color="purple" />
+        <StatCard title="Age Groups" value={deathsByAge.length} icon={Skull} color="blue" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
         <LineChartCard
-          title="Deaths Over Time"
+          title="Monthly Deaths Trend"
           data={chartData}
           lines={[
-            { dataKey: 'deaths', color: '#ef4444', name: 'Daily Deaths' },
-            { dataKey: 'cumulative', color: '#8b5cf6', name: 'Cumulative' },
+            { dataKey: 'deaths', color: '#ef4444', name: 'Deaths' },
           ]}
+          xAxisKey="month"
           loading={loading}
         />
         <BarChartCard
-          title="Deaths by Region"
-          data={regionChartData}
-          bars={[{ dataKey: 'deaths', color: '#8b5cf6', name: 'Total Deaths' }]}
-          xAxisKey="region"
+          title="Deaths by Age Group"
+          data={ageChartData}
+          bars={[{ dataKey: 'deaths', color: '#8b5cf6', name: 'Deaths' }]}
+          xAxisKey="age_group"
           loading={loading}
         />
       </div>
 
       <DataTable
-        title="Death Records"
-        data={data.slice(-100)}
+        title="Monthly Death Records"
+        data={data}
         columns={[
-          { key: 'date', header: 'Date' },
-          { key: 'region', header: 'Region' },
-          { key: 'deaths', header: 'Deaths', render: (item) => item.deaths.toLocaleString() },
-          { key: 'cumulative_deaths', header: 'Cumulative', render: (item) => (item.cumulative_deaths || 0).toLocaleString() },
+          { key: 'month', header: 'Month' },
+          { key: 'deaths', header: 'Deaths', render: (item) => (item.deaths || 0).toLocaleString() },
         ]}
         loading={loading}
       />

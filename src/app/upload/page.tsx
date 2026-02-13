@@ -5,7 +5,6 @@ import { FileSpreadsheet, AlertCircle } from 'lucide-react';
 
 export default function UploadPage() {
   const handleUploadSuccess = () => {
-    // Could trigger a global refresh or show notification
     console.log('Upload successful - data will be refreshed');
   };
 
@@ -13,7 +12,7 @@ export default function UploadPage() {
     <div>
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-slate-900">Upload Data</h1>
-        <p className="text-slate-500">Upload CSV files to update health analytics data</p>
+        <p className="text-slate-500">Upload CSV files to update COVID-19 analytics data</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -24,52 +23,50 @@ export default function UploadPage() {
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
             <h3 className="text-lg font-semibold text-slate-900 mb-4 flex items-center gap-2">
               <FileSpreadsheet className="text-blue-600" size={20} />
-              CSV Format Guidelines
+              Supported Data Types
             </h3>
             <div className="space-y-4 text-sm text-slate-600">
-              <p>Each data type requires specific columns in your CSV file:</p>
+              <p>Upload CSV files for the following data types:</p>
               
               <div className="space-y-3">
                 <div>
                   <p className="font-medium text-slate-800">Infections:</p>
-                  <code className="text-xs bg-slate-100 px-2 py-1 rounded">
-                    date, region, cases, recovered, active
-                  </code>
+                  <p className="text-xs text-slate-500">COVID-19 infection case data</p>
                 </div>
                 
                 <div>
                   <p className="font-medium text-slate-800">Deaths:</p>
-                  <code className="text-xs bg-slate-100 px-2 py-1 rounded">
-                    date, region, deaths, cumulative_deaths
-                  </code>
-                </div>
-                
-                <div>
-                  <p className="font-medium text-slate-800">ICU:</p>
-                  <code className="text-xs bg-slate-100 px-2 py-1 rounded">
-                    date, region, icu_patients, capacity, utilization_rate
-                  </code>
-                </div>
-                
-                <div>
-                  <p className="font-medium text-slate-800">Vaccination:</p>
-                  <code className="text-xs bg-slate-100 px-2 py-1 rounded">
-                    date, region, doses_administered, first_dose, second_dose, booster
-                  </code>
+                  <p className="text-xs text-slate-500">COVID-19 mortality data</p>
                 </div>
                 
                 <div>
                   <p className="font-medium text-slate-800">Hospitalizations:</p>
-                  <code className="text-xs bg-slate-100 px-2 py-1 rounded">
-                    date, region, hospitalizations, discharged, current_patients
-                  </code>
+                  <p className="text-xs text-slate-500">Hospitalization records</p>
+                </div>
+                
+                <div>
+                  <p className="font-medium text-slate-800">ICU Utilization:</p>
+                  <p className="text-xs text-slate-500">ICU bed utilization statistics</p>
+                </div>
+                
+                <div>
+                  <p className="font-medium text-slate-800">New Admissions:</p>
+                  <p className="text-xs text-slate-500">New hospitalization and ICU admission data</p>
+                </div>
+                
+                <div>
+                  <p className="font-medium text-slate-800">Vaccination Progress:</p>
+                  <p className="text-xs text-slate-500">Vaccination progress over time</p>
+                </div>
+                
+                <div>
+                  <p className="font-medium text-slate-800">Vaccination by Age:</p>
+                  <p className="text-xs text-slate-500">Vaccination status by age group</p>
                 </div>
                 
                 <div>
                   <p className="font-medium text-slate-800">Clinics:</p>
-                  <code className="text-xs bg-slate-100 px-2 py-1 rounded">
-                    name, region, address, capacity, type
-                  </code>
+                  <p className="text-xs text-slate-500">Public health clinic locations</p>
                 </div>
               </div>
             </div>

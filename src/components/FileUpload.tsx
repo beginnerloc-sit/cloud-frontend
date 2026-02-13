@@ -2,23 +2,25 @@
 
 import { useState, useRef } from 'react';
 import { Upload, CheckCircle, XCircle, Loader2 } from 'lucide-react';
-import { apiService, DataType, UploadResponse } from '@/lib/api';
+import { apiService, UploadDataType, UploadResponse } from '@/lib/api';
 
 interface FileUploadProps {
   onUploadSuccess?: () => void;
 }
 
-const dataTypes: { value: DataType; label: string }[] = [
+const dataTypes: { value: UploadDataType; label: string }[] = [
   { value: 'infections', label: 'Infections' },
   { value: 'deaths', label: 'Deaths' },
-  { value: 'icu', label: 'ICU' },
-  { value: 'vaccination', label: 'Vaccination' },
   { value: 'hospitalizations', label: 'Hospitalizations' },
+  { value: 'icu-utilization', label: 'ICU Utilization' },
+  { value: 'new-admissions', label: 'New Admissions' },
+  { value: 'vaccination-progress', label: 'Vaccination Progress' },
+  { value: 'vaccination-by-age', label: 'Vaccination by Age' },
   { value: 'clinics', label: 'Clinics' },
 ];
 
 export default function FileUpload({ onUploadSuccess }: FileUploadProps) {
-  const [dataType, setDataType] = useState<DataType | ''>('');
+  const [dataType, setDataType] = useState<UploadDataType | ''>('');
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [result, setResult] = useState<{ success: boolean; message: string; data?: UploadResponse } | null>(null);
@@ -87,7 +89,7 @@ export default function FileUpload({ onUploadSuccess }: FileUploadProps) {
           </label>
           <select
             value={dataType}
-            onChange={(e) => setDataType(e.target.value as DataType)}
+            onChange={(e) => setDataType(e.target.value as UploadDataType)}
             className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           >
             <option value="">Select data type...</option>
