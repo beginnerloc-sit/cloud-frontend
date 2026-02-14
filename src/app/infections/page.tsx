@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Activity, RefreshCw, TrendingUp, Calendar, AlertTriangle, LineChart } from 'lucide-react';
 import { StatCard, LineChartCard, DataTable, BarChartCard } from '@/components';
 import { apiService, WeeklyInfectionsResponse, InfectionTimeseriesResponse } from '@/lib/api';
@@ -13,6 +13,38 @@ const percentile = (sortedValues: number[], p: number): number => {
   if (lower === upper) return sortedValues[lower];
   const weight = index - lower;
   return sortedValues[lower] * (1 - weight) + sortedValues[upper] * weight;
+};
+
+const linearRegression = (points: { t: number; y: number }[]) => {
+  if (points.length === 0) return { a: 0, b: 0 };
+  if (points.length === 1) return { a: points[0].y, b: 0 };
+  const n = points.length;
+  const sumT = points.reduce((sum, p) => sum + p.t, 0);
+  const sumY = points.reduce((sum, p) => sum + p.y, 0);
+  const sumTT = points.reduce((sum, p) => sum + p.t * p.t, 0);
+  const sumTY = points.reduce((sum, p) => sum + p.t * p.y, 0);
+  const denom = n * sumTT - sumT * sumT;
+  if (denom === 0) return { a: sumY / n, b: 0 };
+  const b = (n * sumTY - sumT * sumY) / denom;
+  const a = (sumY - b * sumT) / n;
+  return { a, b };
+};
+
+const getWeekNumber = (epiWeek: string | number | null | undefined) => {
+  if (epiWeek == null) return null;
+  if (typeof epiWeek === 'number') return epiWeek;
+  const trimmed = epiWeek.trim();
+  if (!trimmed) return null;
+  if (trimmed.includes('-')) {
+    const parts = trimmed.split('-');
+    const last = parts[parts.length - 1];
+    const num = Number.parseInt(last, 10);
+    return Number.isFinite(num) ? num : null;
+  }
+  const match = trimmed.match(/(\d+)$/);
+  if (!match) return null;
+  const num = Number.parseInt(match[1], 10);
+  return Number.isFinite(num) ? num : null;
 };
 
 export default function InfectionsPage() {
@@ -109,6 +141,77 @@ export default function InfectionsPage() {
   const anomalyCount = outlierData.filter((r) => r.is_outlier).length;
   const outlierWeeks = outlierData.filter((r) => r.is_outlier);
 
+  const trendChartData = useMemo(() => {
+    if (outlierData.length === 0) return [];
+
+    const base = outlierData.map((row, index) => {
+      const weekNum = getWeekNumber(row.epi_week);
+      return {
+        ...row,
+        t: index,
+        weekNumber: weekNum ?? index + 1,
+      };
+    });
+
+    const totalCases = base.reduce((sum, row) => sum + row.cases, 0);
+    const overallMean = base.length ? totalCases / base.length : 0;
+    const seasonalTotals = new Map<number, { sum: number; count: number }>();
+
+    base.forEach(row => {
+      const week = row.weekNumber;
+      if (!seasonalTotals.has(week)) {
+        seasonalTotals.set(week, { sum: 0, count: 0 });
+      }
+      const entry = seasonalTotals.get(week);
+      if (!entry) return;
+      entry.sum += row.cases;
+      entry.count += 1;
+    });
+
+    const seasonalByWeek = new Map<number, number>();
+    seasonalTotals.forEach((entry, week) => {
+      const avg = entry.count ? entry.sum / entry.count : overallMean;
+      seasonalByWeek.set(week, avg - overallMean);
+    });
+
+    const points = base.map(row => ({ t: row.t, y: row.cases }));
+    const { a, b } = linearRegression(points);
+    const seasonalLength = 52;
+
+    const enriched = base.map(row => {
+      const trend = a + b * row.t;
+      const seasonal = seasonalByWeek.get(row.weekNumber) || 0;
+      return {
+        ...row,
+        regression_trend: Number(trend.toFixed(2)),
+        seasonal_trend: Number((trend + seasonal).toFixed(2)),
+        forecast: null,
+      };
+    });
+
+    const forecastHorizon = 8;
+    const lastIndex = base[base.length - 1]?.t ?? 0;
+    const lastWeek = base[base.length - 1]?.weekNumber ?? seasonalLength;
+    const forecastPoints = Array.from({ length: forecastHorizon }, (_, i) => {
+      const step = i + 1;
+      const t = lastIndex + step;
+      const weekNumber = ((lastWeek - 1 + step) % seasonalLength) + 1;
+      const trend = a + b * t;
+      const seasonal = seasonalByWeek.get(weekNumber) || 0;
+      const forecast = Number((trend + seasonal).toFixed(2));
+      return {
+        epi_week: `F+${step}`,
+        cases: null,
+        moving_avg_4: null,
+        regression_trend: null,
+        seasonal_trend: null,
+        forecast,
+      };
+    });
+
+    return [...enriched, ...forecastPoints];
+  }, [outlierData]);
+
   return (
     <div>
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-8">
@@ -138,6 +241,7 @@ export default function InfectionsPage() {
           value={(summary?.average_weekly || 0).toLocaleString()} 
           icon={TrendingUp} 
           color="blue" 
+          compactValue
         />
         <StatCard 
           title="Total Records" 
@@ -162,10 +266,13 @@ export default function InfectionsPage() {
       <div className="mb-8">
         <LineChartCard
           title={(timeseriesResponse?.title || "COVID-19 Infections by Epi-week") + ' + MA(4)'}
-          data={outlierData}
+          data={trendChartData}
           lines={[
             { dataKey: 'cases', color: '#ef4444', name: 'Cases' },
             { dataKey: 'moving_avg_4', color: '#2563eb', name: '4-Week Moving Avg' },
+            { dataKey: 'regression_trend', color: '#10b981', name: 'Linear Trend' },
+            { dataKey: 'seasonal_trend', color: '#f59e0b', name: 'Seasonal Trend' },
+            { dataKey: 'forecast', color: '#8b5cf6', name: 'Forecast' },
           ]}
           xAxisKey="epi_week"
           loading={loading}

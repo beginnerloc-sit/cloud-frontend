@@ -20,6 +20,35 @@ function sortByMonth(a: string, b: string): number {
   return (monthOrder[aMonth] || 0) - (monthOrder[bMonth] || 0);
 }
 
+function getMonthSortKey(value: string): number {
+  const [month, year] = value.split(' ');
+  const yearNum = parseInt(year) || 0;
+  const monthNum = monthOrder[month] || 0;
+  return yearNum * 12 + monthNum;
+}
+
+function getAgeBucket(ageGroup: string): '0-11' | '12-59' | '60+' | null {
+  const label = ageGroup.trim().toLowerCase();
+  if (!label || label === 'unknown') return null;
+  if (label.includes('+')) {
+    const plusMatch = label.match(/(\d+)\s*\+/);
+    if (plusMatch && parseInt(plusMatch[1], 10) >= 60) return '60+';
+  }
+  if (label.includes('and above')) {
+    const aboveMatch = label.match(/(\d+)\s*years?\s*old\s*and\s*above/);
+    if (aboveMatch && parseInt(aboveMatch[1], 10) >= 60) return '60+';
+  }
+  const rangeMatch = label.match(/(\d+)\s*-\s*(\d+)/);
+  if (rangeMatch) {
+    const low = parseInt(rangeMatch[1], 10);
+    const high = parseInt(rangeMatch[2], 10);
+    if (high <= 11) return '0-11';
+    if (low >= 12 && high <= 59) return '12-59';
+    if (low >= 60) return '60+';
+  }
+  return null;
+}
+
 export default function DeathsPage() {
   const [response, setResponse] = useState<MonthlyDeathsResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -71,6 +100,74 @@ export default function DeathsPage() {
       .sort((a, b) => b.deaths - a.deaths);
   }, [rawData]);
 
+  const averageMonthlyDeathsByBucket = useMemo(() => {
+    const buckets = new Map<string, { total: number; months: Set<string> }>();
+
+    rawData.forEach(r => {
+      const bucket = getAgeBucket(r.age_groups || '');
+      const month = r.as_of_month || '';
+      if (!bucket || !month) return;
+      if (!buckets.has(bucket)) {
+        buckets.set(bucket, { total: 0, months: new Set<string>() });
+      }
+      const entry = buckets.get(bucket);
+      if (!entry) return;
+      entry.total += r.total_deaths || 0;
+      entry.months.add(month);
+    });
+
+    const toAverage = (bucket: string) => {
+      const entry = buckets.get(bucket);
+      if (!entry || entry.months.size === 0) return null;
+      return entry.total / entry.months.size;
+    };
+
+    return {
+      '0-11': toAverage('0-11'),
+      '12-59': toAverage('12-59'),
+      '60+': toAverage('60+'),
+    };
+  }, [rawData]);
+
+  const formatAverage = (value: number | null) => (value === null ? 'N/A' : value.toFixed(1));
+
+  const sortedMonths = useMemo(() => monthlyTotals.map(item => item.month), [monthlyTotals]);
+
+  const bucketTotalsByMonth = useMemo(() => {
+    const totals: Record<string, Record<string, number>> = {};
+    rawData.forEach(r => {
+      const bucket = getAgeBucket(r.age_groups || '');
+      const month = r.as_of_month || '';
+      if (!bucket || !month) return;
+      if (!totals[bucket]) totals[bucket] = {};
+      totals[bucket][month] = (totals[bucket][month] || 0) + (r.total_deaths || 0);
+    });
+    return totals;
+  }, [rawData]);
+
+  const getPreviousMonth = (month: string) => {
+    const index = sortedMonths.indexOf(month);
+    if (index <= 0) return null;
+    return sortedMonths[index - 1];
+  };
+
+  const formatPercentChange = (current: number, previous: number | null) => {
+    if (previous === null || previous === 0) return 'N/A';
+    const change = ((current - previous) / previous) * 100;
+    const sign = change > 0 ? '+' : '';
+    return `${sign}${change.toFixed(1)}%`;
+  };
+
+  const tableData = useMemo(() => {
+    return [...rawData].sort((a, b) => {
+      const aMonth = a.as_of_month || '';
+      const bMonth = b.as_of_month || '';
+      const monthCompare = sortByMonth(aMonth, bMonth);
+      if (monthCompare !== 0) return monthCompare;
+      return String(a.age_groups || '').localeCompare(String(b.age_groups || ''));
+    });
+  }, [rawData]);
+
   const totalDeaths = summary?.total_deaths || 0;
   return (
     <div>
@@ -110,6 +207,30 @@ export default function DeathsPage() {
         />
       </div>
 
+      <div className="mb-8">
+        <h2 className="text-lg font-semibold text-slate-900 mb-4">Average Monthly Deaths by Age Group</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <StatCard
+            title="Ages 0-11"
+            value={formatAverage(averageMonthlyDeathsByBucket['0-11'])}
+            icon={Skull}
+            color="blue"
+          />
+          <StatCard
+            title="Ages 12-59"
+            value={formatAverage(averageMonthlyDeathsByBucket['12-59'])}
+            icon={Skull}
+            color="purple"
+          />
+          <StatCard
+            title="Ages 60+"
+            value={formatAverage(averageMonthlyDeathsByBucket['60+'])}
+            icon={Skull}
+            color="red"
+          />
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
         <LineChartCard
           title="Monthly Deaths Trend"
@@ -129,11 +250,33 @@ export default function DeathsPage() {
 
       <DataTable
         title="Monthly Death Records by Age Group"
-        data={rawData}
+        data={tableData}
         columns={[
-          { key: 'as_of_month', header: 'Month' },
+          {
+            key: 'as_of_month',
+            header: 'Month',
+            sortAccessor: (item) => getMonthSortKey(item.as_of_month || ''),
+          },
           { key: 'age_groups', header: 'Age Group' },
+          {
+            key: 'age_bucket',
+            header: 'Age Bucket',
+            render: (item) => getAgeBucket(item.age_groups || '') || 'Unknown',
+          },
           { key: 'total_deaths', header: 'Deaths', render: (item) => (item.total_deaths || 0).toLocaleString() },
+          {
+            key: 'mom_change',
+            header: 'Monthly Change',
+            render: (item) => {
+              const bucket = getAgeBucket(item.age_groups || '');
+              const month = item.as_of_month || '';
+              if (!bucket || !month) return 'N/A';
+              const currentTotal = bucketTotalsByMonth[bucket]?.[month] ?? 0;
+              const previousMonth = getPreviousMonth(month);
+              const previousTotal = previousMonth ? (bucketTotalsByMonth[bucket]?.[previousMonth] ?? null) : null;
+              return formatPercentChange(currentTotal, previousTotal);
+            },
+          },
         ]}
         loading={loading}
       />

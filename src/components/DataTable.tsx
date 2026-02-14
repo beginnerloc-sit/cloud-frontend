@@ -11,6 +11,7 @@ interface DataTableProps {
     header: string;
     render?: (item: any) => ReactNode;
     sortable?: boolean;
+    sortAccessor?: (item: any) => string | number | null | undefined;
   }[];
   title?: string;
   loading?: boolean;
@@ -51,9 +52,11 @@ export default function DataTable({
   // Sort data
   const sortedData = useMemo(() => {
     if (!sortKey) return filteredData;
+    const column = columns.find(col => col.key === sortKey);
+    const getSortValue = column?.sortAccessor || ((item: any) => item[sortKey]);
     return [...filteredData].sort((a, b) => {
-      const aVal = a[sortKey];
-      const bVal = b[sortKey];
+      const aVal = getSortValue(a);
+      const bVal = getSortValue(b);
       if (aVal == null) return sortDir === 'asc' ? 1 : -1;
       if (bVal == null) return sortDir === 'asc' ? -1 : 1;
       if (typeof aVal === 'number' && typeof bVal === 'number') {
