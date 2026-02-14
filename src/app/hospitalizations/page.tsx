@@ -33,7 +33,7 @@ export default function HospitalizationsPage() {
   }, []);
 
   // Ensure data is always an array
-  const safeData = Array.isArray(data) ? data : [];
+  const safeData = useMemo(() => (Array.isArray(data) ? data : []), [data]);
 
   // Total cases from summary or calculated
   const totalCases = summary?.total_cases || safeData.reduce((sum, r) => sum + (r.total_count || 0), 0);
@@ -88,9 +88,43 @@ export default function HospitalizationsPage() {
   // Status distribution for pie chart
   const statusPieData = statusData.map(s => ({ name: s.status, value: s.count }));
 
+  // Outlier detection by week using IQR on total weekly hospitalizations
+  const outlierWeekData = useMemo(() => {
+    const totals = timelineData.map((w) => ({
+      epi_week: w.epi_week,
+      total: Number((w.Hospitalised || 0) + (w.ICU || 0)),
+    }));
+
+    const sortedTotals = totals.map((t) => t.total).sort((a, b) => a - b);
+    if (sortedTotals.length === 0) return [];
+
+    const percentile = (arr: number[], p: number): number => {
+      const idx = (arr.length - 1) * p;
+      const lo = Math.floor(idx);
+      const hi = Math.ceil(idx);
+      if (lo === hi) return arr[lo];
+      const weight = idx - lo;
+      return arr[lo] * (1 - weight) + arr[hi] * weight;
+    };
+
+    const q1 = percentile(sortedTotals, 0.25);
+    const q3 = percentile(sortedTotals, 0.75);
+    const iqr = q3 - q1;
+    const lowerFence = q1 - 1.5 * iqr;
+    const upperFence = q3 + 1.5 * iqr;
+
+    return totals.map((t) => ({
+      epi_week: t.epi_week,
+      total: Number(t.total.toFixed(1)),
+      upper_iqr_fence: Number(upperFence.toFixed(1)),
+      lower_iqr_fence: Number(lowerFence.toFixed(1)),
+      is_outlier: t.total < lowerFence || t.total > upperFence ? 1 : 0,
+    }));
+  }, [timelineData]);
+
   return (
     <div>
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-8">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Hospitalizations Data</h1>
           <p className="text-slate-500">Monitor hospitalization trends by clinical status and age</p>
@@ -159,11 +193,15 @@ export default function HospitalizationsPage() {
           xAxisKey="age_group"
           loading={loading}
         />
-        <BarChartCard
-          title="By Clinical Status"
-          data={statusData}
-          bars={[{ dataKey: 'count', color: '#3b82f6', name: 'Cases' }]}
-          xAxisKey="status"
+        <LineChartCard
+          title="Outlier Weeks Detection (IQR)"
+          data={outlierWeekData}
+          lines={[
+            { dataKey: 'total', color: '#ef4444', name: 'Weekly Total' },
+            { dataKey: 'upper_iqr_fence', color: '#f59e0b', name: 'Upper IQR Fence' },
+            { dataKey: 'lower_iqr_fence', color: '#f59e0b', name: 'Lower IQR Fence' },
+          ]}
+          xAxisKey="epi_week"
           loading={loading}
         />
       </div>

@@ -13,8 +13,7 @@ import {
   Clinic,
   InfectionTimeseries,
   DeathsByAge,
-  ICUStatusDistribution,
-  VaccinationUptakeTrend
+  ICUStatusDistribution
 } from '@/lib/api';
 
 interface DashboardData {
@@ -36,7 +35,6 @@ interface DashboardData {
   infectionsTimeseries: InfectionTimeseries[];
   deathsByAge: DeathsByAge[];
   icuStatus: ICUStatusDistribution[];
-  vaccinationUptake: VaccinationUptakeTrend[];
 }
 
 export default function DashboardPage() {
@@ -52,7 +50,6 @@ export default function DashboardPage() {
     infectionsTimeseries: [],
     deathsByAge: [],
     icuStatus: [],
-    vaccinationUptake: [],
   });
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
@@ -78,15 +75,12 @@ export default function DashboardPage() {
 
   // Ensure all data arrays are safe
   const safeInfections = Array.isArray(data.infections) ? data.infections : [];
-  const safeDeaths = Array.isArray(data.deaths) ? data.deaths : [];
-  const safeIcu = Array.isArray(data.icu) ? data.icu : [];
+  const safeDeaths = useMemo(() => (Array.isArray(data.deaths) ? data.deaths : []), [data.deaths]);
+  const safeIcu = useMemo(() => (Array.isArray(data.icu) ? data.icu : []), [data.icu]);
   const safeVaccination = Array.isArray(data.vaccination) ? data.vaccination : [];
   const safeHospitalizations = Array.isArray(data.hospitalizations) ? data.hospitalizations : [];
   const safeClinics = Array.isArray(data.clinics) ? data.clinics : [];
   const safeInfectionsTimeseries = Array.isArray(data.infectionsTimeseries) ? data.infectionsTimeseries : [];
-  const safeDeathsByAge = Array.isArray(data.deathsByAge) ? data.deathsByAge : [];
-  const safeIcuStatus = Array.isArray(data.icuStatus) ? data.icuStatus : [];
-  const safeVaccinationUptake = Array.isArray(data.vaccinationUptake) ? data.vaccinationUptake : [];
 
   // Calculate summary statistics - use API summary when available
   const totalCases = data.infectionsSummary?.total_infections || 
@@ -113,13 +107,6 @@ export default function DashboardPage() {
   const infectionChartData = safeInfectionsTimeseries.map((r) => ({
     epi_week: r.epi_week || '',
     cases: r.est_count || 0,
-  }));
-
-  // Vaccination progress chart data - show uptake percentages over time
-  const vaccinationChartData = sortedVaccination.slice(-60).map((r) => ({
-    date: r.vacc_date || '',
-    'One Dose %': r.received_one_dose_pcttakeup || 0,
-    'Full Regimen %': r.full_regimen_pcttakeup || 0,
   }));
 
   // Aggregate deaths by age group from monthly deaths data
@@ -149,7 +136,7 @@ export default function DashboardPage() {
   return (
     <div>
       {/* Header */}
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-8">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">COVID-19 Analytics Dashboard</h1>
           <p className="text-slate-500">
@@ -209,7 +196,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+      <div className="mb-8">
         <LineChartCard
           title="Infection Trends"
           data={infectionChartData}
@@ -217,15 +204,6 @@ export default function DashboardPage() {
             { dataKey: 'cases', color: '#ef4444', name: 'Cases' },
           ]}
           xAxisKey="epi_week"
-          loading={loading}
-        />
-        <LineChartCard
-          title="Vaccination Uptake Trend"
-          data={vaccinationChartData}
-          lines={[
-            { dataKey: 'One Dose %', color: '#10b981', name: 'One Dose %' },
-            { dataKey: 'Full Regimen %', color: '#3b82f6', name: 'Full Regimen %' },
-          ]}
           loading={loading}
         />
       </div>

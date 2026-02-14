@@ -26,8 +26,10 @@ export default function ICUPage() {
   }, []);
 
   // Extract data from response
-  const rawData: ICUUtilization[] = Array.isArray(response?.data) ? response.data : [];
-  const summary = response?.summary;
+  const rawData: ICUUtilization[] = useMemo(
+    () => (Array.isArray(response?.data) ? response.data : []),
+    [response?.data]
+  );
 
   // Get unique epi_weeks sorted chronologically
   const sortedWeeks = useMemo(() => {
@@ -87,7 +89,7 @@ export default function ICUPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-8">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">ICU Utilization</h1>
           <p className="text-slate-500">ICU bed status by epidemiological week</p>

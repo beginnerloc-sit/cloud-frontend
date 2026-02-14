@@ -42,21 +42,30 @@ export default function VaccinationPage() {
   // Get latest record for summary stats
   const latestRecord = safeData.length > 0 ? safeData[safeData.length - 1] : null;
 
-  // Progress over time chart - show last 60 days
-  const progressChartData = safeData.slice(-60).map((r) => ({
-    date: r.vacc_date || '',
-    'At Least One Dose': r.received_at_least_one_dose || 0,
-    'Full Regimen': r.full_regimen || 0,
-    'Minimum Protection': r.minimum_protection || 0,
-  }));
+  // Incremental trend chart - first difference of cumulative series (full history)
+  const incrementalChartData = safeData.map((r, i, arr) => {
+    if (i === 0) {
+      return {
+        date: r.vacc_date || '',
+        'New One Dose+': 0,
+        'New Full Regimen': 0,
+        'New Min Protection': 0,
+      };
+    }
 
-  // Uptake percentage trend chart
-  const uptakeChartData = safeData.slice(-60).map((r) => ({
-    date: r.vacc_date || '',
-    'One Dose %': r.received_one_dose_pcttakeup || 0,
-    'Full Regimen %': r.full_regimen_pcttakeup || 0,
-    'Min Protection %': r.minimum_protection_pcttakeup || 0,
-  }));
+    const prev = arr[i - 1];
+    const newOneDose = Math.max(0, (r.received_at_least_one_dose || 0) - (prev.received_at_least_one_dose || 0));
+    const newFull = Math.max(0, (r.full_regimen || 0) - (prev.full_regimen || 0));
+    const newMin = Math.max(0, (r.minimum_protection || 0) - (prev.minimum_protection || 0));
+
+    return {
+      date: r.vacc_date || '',
+      'New One Dose+': Math.round(newOneDose),
+      'New Full Regimen': Math.round(newFull),
+      'New Min Protection': Math.round(newMin),
+    };
+  });
+
 
   // Vaccination coverage breakdown (latest data)
   const coverageData = latestRecord ? [
@@ -88,10 +97,10 @@ export default function VaccinationPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-8">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Vaccination Progress</h1>
-          <p className="text-slate-500">Track vaccination coverage and uptake rates</p>
+          <p className="text-slate-500">Track vaccination coverage and dose-stage progression</p>
         </div>
         <button
           onClick={loadData}
@@ -130,24 +139,14 @@ export default function VaccinationPage() {
         />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+      <div className="mb-8">
         <LineChartCard
-          title="Cumulative Vaccinations Over Time"
-          data={progressChartData}
+          title="Daily Incremental Vaccinations (First Difference)"
+          data={incrementalChartData}
           lines={[
-            { dataKey: 'At Least One Dose', color: '#10b981', name: 'At Least One Dose' },
-            { dataKey: 'Full Regimen', color: '#3b82f6', name: 'Full Regimen' },
-            { dataKey: 'Minimum Protection', color: '#8b5cf6', name: 'Minimum Protection' },
-          ]}
-          loading={loading}
-        />
-        <LineChartCard
-          title="Vaccination Uptake Rate (%)"
-          data={uptakeChartData}
-          lines={[
-            { dataKey: 'One Dose %', color: '#10b981', name: 'One Dose %' },
-            { dataKey: 'Full Regimen %', color: '#3b82f6', name: 'Full Regimen %' },
-            { dataKey: 'Min Protection %', color: '#8b5cf6', name: 'Min Protection %' },
+            { dataKey: 'New One Dose+', color: '#10b981', name: 'New One Dose+' },
+            { dataKey: 'New Full Regimen', color: '#3b82f6', name: 'New Full Regimen' },
+            { dataKey: 'New Min Protection', color: '#8b5cf6', name: 'New Min Protection' },
           ]}
           loading={loading}
         />

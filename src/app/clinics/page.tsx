@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Hospital, RefreshCw, Search, Syringe, MapPin } from 'lucide-react';
 import { StatCard, DataTable } from '@/components';
+import ClinicMap from '@/components/ClinicMap';
 import { apiService, Clinic, ClinicsResponse } from '@/lib/api';
 
 export default function ClinicsPage() {
@@ -71,7 +72,7 @@ export default function ClinicsPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-8">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Vaccination Clinics</h1>
           <p className="text-slate-500">View and search vaccination clinic locations in Singapore</p>
@@ -95,19 +96,19 @@ export default function ClinicsPage() {
       {/* Search */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-8">
         <h3 className="text-lg font-semibold text-slate-900 mb-4">Search Clinics</h3>
-        <div className="flex gap-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:gap-4">
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             onKeyPress={handleKeyPress}
             placeholder="Search by name, address, or vaccine type..."
-            className="flex-1 px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full flex-1 px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
           <button
             onClick={handleSearch}
             disabled={loading}
-            className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+            className="flex w-full items-center justify-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 sm:w-auto"
           >
             <Search size={18} />
             Search
@@ -135,6 +136,8 @@ export default function ClinicsPage() {
           </span>
         </div>
       </div>
+
+      <ClinicMap clinics={filteredData} />
 
       <DataTable
         title="Clinic Directory"

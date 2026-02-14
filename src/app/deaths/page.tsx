@@ -41,7 +41,10 @@ export default function DeathsPage() {
   }, []);
 
   // Extract data from response
-  const rawData: MonthlyDeath[] = Array.isArray(response?.data) ? response.data : [];
+  const rawData: MonthlyDeath[] = useMemo(
+    () => (Array.isArray(response?.data) ? response.data : []),
+    [response?.data]
+  );
   const summary = response?.summary;
 
   // Group deaths by month for line chart
@@ -69,11 +72,9 @@ export default function DeathsPage() {
   }, [rawData]);
 
   const totalDeaths = summary?.total_deaths || 0;
-  const totalRecords = summary?.total_records || rawData.length;
-
   return (
     <div>
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-8">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Deaths Data</h1>
           <p className="text-slate-500">COVID-19 mortality data by month and age group</p>
