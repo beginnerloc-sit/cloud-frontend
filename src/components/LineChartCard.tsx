@@ -32,33 +32,33 @@ export default function LineChartCard({
 }: LineChartCardProps) {
   if (loading) {
     return (
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-        <h3 className="text-lg font-semibold text-slate-900 mb-4">{title}</h3>
+      <div className="medical-card p-6">
+        <h3 className="medical-card-title text-lg font-semibold mb-4">{title}</h3>
         <div className="h-80 bg-slate-100 rounded animate-pulse" />
       </div>
     );
   }
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-      <h3 className="text-lg font-semibold text-slate-900 mb-4">{title}</h3>
+    <div className="medical-card p-6">
+      <h3 className="medical-card-title text-lg font-semibold mb-4">{title}</h3>
       <div className="h-80">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={data} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+            <CartesianGrid strokeDasharray="3 3" stroke="#d2e8d8" />
             <XAxis 
               dataKey={xAxisKey} 
-              stroke="#64748b"
-              tick={{ fill: '#64748b', fontSize: 12 }}
+              stroke="#3f6a50"
+              tick={{ fill: '#3f6a50', fontSize: 12 }}
             />
             <YAxis 
-              stroke="#64748b"
-              tick={{ fill: '#64748b', fontSize: 12 }}
+              stroke="#3f6a50"
+              tick={{ fill: '#3f6a50', fontSize: 12 }}
             />
             <Tooltip 
               contentStyle={{ 
-                backgroundColor: '#fff', 
-                border: '1px solid #e2e8f0',
+                backgroundColor: '#f8fff9', 
+                border: '1px solid #c9e2cf',
                 borderRadius: '0.5rem'
               }}
             />

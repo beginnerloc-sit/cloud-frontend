@@ -1,6 +1,5 @@
 'use client';
 
-import { ReactNode } from 'react';
 import { LucideIcon } from 'lucide-react';
 
 interface StatCardProps {
@@ -12,31 +11,33 @@ interface StatCardProps {
 }
 
 const colorClasses = {
-  blue: 'bg-blue-500',
-  green: 'bg-green-500',
-  red: 'bg-red-500',
-  yellow: 'bg-yellow-500',
-  purple: 'bg-purple-500',
+  blue: 'bg-[#2e8f5e]',
+  green: 'bg-[#1f7a4b]',
+  red: 'bg-[#3b9b67]',
+  yellow: 'bg-[#5ab079]',
+  purple: 'bg-[#2b8656]',
 };
 
 export default function StatCard({ title, value, icon: Icon, trend, color = 'blue' }: StatCardProps) {
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-slate-500 text-sm font-medium">{title}</p>
-          <p className="text-2xl font-bold text-slate-900 mt-1">
-            {typeof value === 'number' ? value.toLocaleString() : value}
-          </p>
-          {trend !== undefined && (
-            <p className={`text-sm mt-1 ${trend >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-              {trend >= 0 ? '↑' : '↓'} {Math.abs(trend)}% from last period
-            </p>
-          )}
-        </div>
-        <div className={`${colorClasses[color]} p-3 rounded-lg`}>
+    <div className="medical-card overflow-hidden p-5 sm:p-6">
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4 gap-y-3">
+        <p className="min-w-0 text-slate-500 text-sm font-semibold uppercase tracking-wide leading-tight [overflow-wrap:anywhere]">
+          {title}
+        </p>
+        <div className={`${colorClasses[color]} h-14 w-14 rounded-2xl shadow-md flex items-center justify-center`}>
           <Icon className="text-white" size={24} />
         </div>
+
+        <p className="col-span-2 whitespace-nowrap text-[clamp(1.8rem,2.5vw,2.45rem)] leading-none font-bold text-[#1b5033] tabular-nums">
+          {typeof value === 'number' ? value.toLocaleString() : value}
+        </p>
+
+        {trend !== undefined && (
+          <p className={`col-span-2 text-sm ${trend >= 0 ? 'text-[#1f7a4b]' : 'text-[#2f6a49]'}`}>
+            {trend >= 0 ? '↑' : '↓'} {Math.abs(trend)}% from last period
+          </p>
+        )}
       </div>
     </div>
   );

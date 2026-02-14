@@ -1,8 +1,15 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f3faf5;
+  --foreground: #143323;
+  --surface: #ffffff;
+  --surface-2: #f8fff9;
+  --border: #c9e2cf;
+  --muted: #4d6b58;
+  --brand: #1f7a4b;
+  --accent: #2e8f5e;
+  --ok: #2e8f5e;
 }
 
 @theme inline {
@@ -12,15 +19,45 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), "Segoe UI", sans-serif;
+  background-image:
+    radial-gradient(circle at 10% 10%, rgba(46, 143, 94, 0.09), transparent 35%),
+    radial-gradient(circle at 90% 0%, rgba(90, 176, 121, 0.09), transparent 28%),
+    linear-gradient(180deg, #fbfffc 0%, #eef8f1 100%);
+  min-height: 100vh;
+}
+
+/* Shared medical UI surfaces */
+.medical-card {
+  background: linear-gradient(180deg, var(--surface) 0%, var(--surface-2) 100%);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 8px 22px rgba(31, 122, 75, 0.09);
+}
+
+.medical-card-title {
+  color: #1b5033;
+  letter-spacing: 0.01em;
+}
+
+.app-shell {
+  position: relative;
+}
+
+.app-shell::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto auto 0;
+  width: 100%;
+  height: 6px;
+  background: linear-gradient(90deg, #1f7a4b 0%, #2e8f5e 50%, #5ab079 100%);
+  border-radius: 999px;
+  opacity: 0.9;
+}
+
+.section-note {
+  color: var(--muted);
 }

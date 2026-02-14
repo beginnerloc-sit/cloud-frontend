@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { Activity, Skull, Heart, Syringe, Building2, Hospital, RefreshCw } from 'lucide-react';
 import { StatCard, LineChartCard, BarChartCard, PieChartCard } from '@/components';
+import SpikeProteinViewer from '@/components/SpikeProteinViewer';
 import { 
   apiService, 
   WeeklyInfection, 
@@ -223,6 +224,10 @@ export default function DashboardPage() {
           data={icuStatusData}
           loading={loading}
         />
+      </div>
+
+      <div className="mt-6">
+        <SpikeProteinViewer />
       </div>
     </div>
   );

@@ -30,7 +30,9 @@ export default function RootLayout({
       >
         <Sidebar />
         <main className="min-h-screen p-4 md:ml-64 md:p-8">
-          {children}
+          <div className="app-shell pt-5">
+            {children}
+          </div>
         </main>
       </body>
     </html>

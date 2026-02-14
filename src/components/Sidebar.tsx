@@ -37,8 +37,8 @@ export default function Sidebar() {
     <>
       <header className="sticky top-0 z-40 flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 md:hidden">
         <div>
-          <h1 className="text-base font-bold text-slate-900">Health Analytics</h1>
-          <p className="text-xs text-slate-500">Data Dashboard</p>
+          <h1 className="text-base font-bold text-[#1b5033]">COVID Response Center</h1>
+          <p className="text-xs text-slate-500">Clinical Intelligence</p>
         </div>
         <button
           onClick={() => setMobileOpen((open) => !open)}
@@ -58,13 +58,17 @@ export default function Sidebar() {
       )}
 
       <aside
-        className={`fixed left-0 top-0 z-50 h-screen w-64 bg-slate-900 p-4 text-white transition-transform duration-200 md:z-30 md:translate-x-0 ${
+        className={`fixed left-0 top-0 z-50 h-screen w-64 bg-[#1f5f3b] p-4 text-white transition-transform duration-200 md:z-30 md:translate-x-0 ${
           mobileOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
+        style={{
+          backgroundImage:
+            'radial-gradient(circle at 0% 0%, rgba(147,230,179,0.22), transparent 30%), radial-gradient(circle at 100% 12%, rgba(90,176,121,0.2), transparent 28%)',
+        }}
       >
         <div className="mb-8">
-          <h1 className="text-xl font-bold text-blue-400">Health Analytics</h1>
-          <p className="text-sm text-slate-400">Data Dashboard</p>
+          <h1 className="text-xl font-bold text-[#dbfbe7]">COVID Response Center</h1>
+          <p className="text-sm text-green-100">Hospital Operations Dashboard</p>
         </div>
 
         <nav className="space-y-2">
@@ -79,8 +83,8 @@ export default function Sidebar() {
                 onClick={closeMobile}
                 className={`flex items-center gap-3 rounded-lg px-4 py-3 transition-colors ${
                   isActive
-                    ? 'bg-blue-600 text-white'
-                    : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                    ? 'bg-[#2e8f5e] text-white shadow-lg shadow-[#2e8f5e]/30'
+                    : 'text-green-100 hover:bg-[#2a7449] hover:text-white'
                 }`}
               >
                 <Icon size={20} />

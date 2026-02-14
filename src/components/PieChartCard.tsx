@@ -16,7 +16,7 @@ interface PieChartCardProps {
   loading?: boolean;
 }
 
-const DEFAULT_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
+const DEFAULT_COLORS = ['#1f7a4b', '#2e8f5e', '#5ab079', '#74c491', '#3b9b67', '#a7ddbc'];
 
 export default function PieChartCard({ 
   title, 
@@ -26,16 +26,16 @@ export default function PieChartCard({
 }: PieChartCardProps) {
   if (loading) {
     return (
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-        <h3 className="text-lg font-semibold text-slate-900 mb-4">{title}</h3>
+      <div className="medical-card p-6">
+        <h3 className="medical-card-title text-lg font-semibold mb-4">{title}</h3>
         <div className="h-80 bg-slate-100 rounded animate-pulse" />
       </div>
     );
   }
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-      <h3 className="text-lg font-semibold text-slate-900 mb-4">{title}</h3>
+    <div className="medical-card p-6">
+      <h3 className="medical-card-title text-lg font-semibold mb-4">{title}</h3>
       <div className="h-80">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
@@ -55,8 +55,8 @@ export default function PieChartCard({
             </Pie>
             <Tooltip 
               contentStyle={{ 
-                backgroundColor: '#fff', 
-                border: '1px solid #e2e8f0',
+                backgroundColor: '#f8fff9', 
+                border: '1px solid #c9e2cf',
                 borderRadius: '0.5rem'
               }}
             />

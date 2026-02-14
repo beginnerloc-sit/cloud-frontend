@@ -34,7 +34,7 @@ export default function DataTable({
   const [currentPage, setCurrentPage] = useState(1);
 
   // Ensure data is always an array
-  const safeData = Array.isArray(data) ? data : [];
+  const safeData = useMemo(() => (Array.isArray(data) ? data : []), [data]);
 
   // Filter data based on search
   const filteredData = useMemo(() => {
@@ -72,11 +72,6 @@ export default function DataTable({
     return sortedData.slice(start, start + pageSize);
   }, [sortedData, currentPage, pageSize]);
 
-  // Reset to page 1 when search/sort changes
-  useMemo(() => {
-    setCurrentPage(1);
-  }, [search, sortKey, sortDir]);
-
   const handleSort = (key: string) => {
     if (sortKey === key) {
       setSortDir(sortDir === 'asc' ? 'desc' : 'asc');
@@ -111,8 +106,8 @@ export default function DataTable({
 
   if (loading) {
     return (
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-        {title && <h3 className="text-lg font-semibold text-slate-900 mb-4">{title}</h3>}
+      <div className="medical-card p-6">
+        {title && <h3 className="medical-card-title text-lg font-semibold mb-4">{title}</h3>}
         <div className="animate-pulse space-y-3">
           {[...Array(5)].map((_, i) => (
             <div key={i} className="h-10 bg-slate-200 rounded" />
@@ -123,11 +118,11 @@ export default function DataTable({
   }
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+    <div className="medical-card overflow-hidden">
       {/* Header with title and actions */}
-      <div className="px-6 py-4 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="px-6 py-4 border-b border-[#c8d9e4] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          {title && <h3 className="text-lg font-semibold text-slate-900">{title}</h3>}
+          {title && <h3 className="medical-card-title text-lg font-semibold">{title}</h3>}
           <p className="text-sm text-slate-500">
             {filteredData.length} {filteredData.length === 1 ? 'record' : 'records'}
             {search && ` (filtered from ${safeData.length})`}
@@ -142,14 +137,14 @@ export default function DataTable({
                 placeholder="Search..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="pl-9 pr-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent w-48"
+                className="pl-9 pr-3 py-2 border border-[#c9e2cf] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2e8f5e] focus:border-transparent w-48"
               />
             </div>
           )}
           {exportable && (
             <button
               onClick={exportToCsv}
-              className="flex items-center gap-2 px-3 py-2 text-sm text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
+              className="flex items-center gap-2 px-3 py-2 text-sm text-[#1b5033] border border-[#c9e2cf] rounded-lg hover:bg-[#edf8f0] transition-colors"
             >
               <Download size={16} />
               Export
@@ -161,14 +156,14 @@ export default function DataTable({
       {/* Table */}
       <div className="overflow-x-auto">
         <table className="w-full">
-          <thead className="bg-slate-50">
+          <thead className="bg-[#edf8f0]">
             <tr>
               {columns.map((col) => (
                 <th
                   key={String(col.key)}
                   onClick={() => col.sortable !== false && handleSort(col.key)}
-                  className={`px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider ${
-                    col.sortable !== false ? 'cursor-pointer hover:bg-slate-100 select-none' : ''
+                  className={`px-6 py-3 text-left text-xs font-medium text-[#426751] uppercase tracking-wider ${
+                    col.sortable !== false ? 'cursor-pointer hover:bg-[#e0f1e5] select-none' : ''
                   }`}
                 >
                   <div className="flex items-center gap-1">
@@ -181,7 +176,7 @@ export default function DataTable({
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-200">
+          <tbody className="divide-y divide-[#dcefe1]">
             {paginatedData.length === 0 ? (
               <tr>
                 <td colSpan={columns.length} className="px-6 py-8 text-center text-slate-500">
@@ -190,9 +185,9 @@ export default function DataTable({
               </tr>
             ) : (
               paginatedData.map((item, index) => (
-                <tr key={index} className="hover:bg-slate-50">
+                <tr key={index} className="hover:bg-[#f3fbf5]">
                   {columns.map((col) => (
-                    <td key={col.key} className="px-6 py-4 whitespace-nowrap text-sm text-slate-900">
+                    <td key={col.key} className="px-6 py-4 whitespace-nowrap text-sm text-[#1f4a31]">
                       {col.render 
                         ? col.render(item) 
                         : String(item[col.key] ?? '-')}
@@ -207,7 +202,7 @@ export default function DataTable({
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div className="px-6 py-4 border-t border-slate-200 flex items-center justify-between">
+        <div className="px-6 py-4 border-t border-[#c9e2cf] flex items-center justify-between">
           <p className="text-sm text-slate-500">
             Showing {((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, sortedData.length)} of {sortedData.length}
           </p>
